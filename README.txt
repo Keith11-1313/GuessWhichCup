@@ -1,5 +1,11 @@
 WHAT THE CUP! DELUXE by @loqz
 
+PROJECT MAP
+- what_the_cup.py     Game loop, screens, input, and cup animation
+- game_config.py      Difficulty rules, colors, paths, and level scaling
+- score_store.py      Small JSON load/save helper for high scores
+- cup.gif             The cup sprite used by Turtle
+
 HOW TO RUN
 1. Extract the ZIP completely.
 2. Open the extracted folder as a project in PyCharm.
@@ -21,3 +27,9 @@ number of swaps and reveal time.
 High scores save to what_the_cup_scores.json in the same folder.
 Uses built-in Python Turtle and a transparent GIF made from your cup image.
 Sound uses a Windows notification or a system bell where supported.
+
+DEFENSE-FRIENDLY EXPLANATION
+The program follows a simple state machine: menu -> reveal -> shuffle -> select
+-> result. The update() method advances animation frames, while choose() handles
+the player's decision. Keeping settings and score storage in separate modules
+makes the main file easier to read, test, and explain.

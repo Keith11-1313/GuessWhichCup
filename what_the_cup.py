@@ -1,45 +1,16 @@
-import json
 import math
 import random
 import sys
 import turtle
 import tkinter
-from pathlib import Path
+from game_config import (COLORS, CUP_GIF, DIFFICULTIES, FRAME_MS, HEIGHT,
+                         SAVE_FILE, STORY_LEVELS, WIDTH, level_settings)
+from score_store import load_scores, save_score
 
-ROOT = Path(__file__).resolve().parent
-CUP_GIF = ROOT / 'cup.gif'
-SAVE_FILE = ROOT / 'what_the_cup_scores.json'
-WIDTH, HEIGHT = 1000, 700
-FRAME_MS = 17
-STORY_LEVELS = 10
-
-BG = '#131a2e'
-WHITE = '#f4f7ff'
-MUTED = '#b8c4e1'
-GOLD = '#f9cf49'
-
-DIFFICULTIES = {
-    'Easy':   {'extra_swaps': 0, 'duration': 1.35, 'reveal': 1.45, 'lives': 5},
-    'Normal': {'extra_swaps': 2, 'duration': 1.00, 'reveal': 1.00, 'lives': 3},
-    'Hard':   {'extra_swaps': 5, 'duration': 0.72, 'reveal': 0.70, 'lives': 1},
-}
-
-
-def level_settings(level, difficulty):
-    tune = DIFFICULTIES[difficulty]
-    cups = min(6, 3 + (level - 1) // 3)
-    swaps = 4 + level * 2 + tune['extra_swaps']
-    frames = max(9, round(max(15, 45 - (level - 1) * 3) * tune['duration']))
-    reveal = max(65, round(max(100, 175 - (level - 1) * 6) * tune['reveal']))
-    return cups, swaps, frames, reveal
-
-
-def load_scores():
-    try:
-        data = json.loads(SAVE_FILE.read_text(encoding='utf-8'))
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError):
-        return {}
+BG = COLORS['background']
+WHITE = COLORS['white']
+MUTED = COLORS['muted']
+GOLD = COLORS['gold']
 
 
 def make_writer(color=WHITE):
@@ -84,7 +55,8 @@ class Cup:
         self.sprite = turtle.Turtle(visible=False)
         self.sprite.speed(0)
         self.sprite.penup()
-        self.sprite.shape('gold_cup')
+        shape_name = 'gold_cup' if 'gold_cup' in self.sprite.screen._shapes else str(CUP_GIF)
+        self.sprite.shape(shape_name)
         self.sprite.goto(x, 0)
         self.sprite.showturtle()
 
@@ -93,10 +65,16 @@ class Cup:
 
     def hide(self):
         self.sprite.hideturtle()
+        self.sprite.clear()
+        try:
+            if self.sprite in self.sprite.screen._turtles:
+                self.sprite.screen._turtles.remove(self.sprite)
+        except Exception:
+            pass
 
 
 class Game:
-    def __init__(self):
+    def __init__(self, run_loop=True):
         if not CUP_GIF.exists():
             raise FileNotFoundError(
                 'cup.gif is missing. Extract the entire ZIP into one folder.'
@@ -107,7 +85,9 @@ class Game:
         self.screen.title('GUESS WHICH CUP! | by @RENE')
         self.screen.bgcolor(BG)
         self.screen.tracer(0)
-        self.screen.register_shape('gold_cup', str(CUP_GIF))
+        self.screen.register_shape(str(CUP_GIF))
+        if str(CUP_GIF) in self.screen._shapes:
+            self.screen.register_shape('gold_cup', self.screen._shapes[str(CUP_GIF)])
 
         self.static = make_writer()
         self.menu_text = make_writer()
@@ -122,7 +102,7 @@ class Game:
         self.ball.shapesize(0.85)
         self.ball.color(GOLD)
 
-        self.scores = load_scores()
+        self.scores = load_scores(SAVE_FILE)
         self.mode = 'Story'
         self.difficulty = 'Normal'
         self.level = 1
@@ -169,7 +149,8 @@ class Game:
         self.screen.onkeypress(self.screen.bye, 'Escape')
         self.show_menu()
         self.screen.ontimer(self.update, FRAME_MS)
-        self.screen.mainloop()
+        if run_loop:
+            self.screen.mainloop()
 
     def write(self, pen, x, y, text, size=16, color=WHITE, align='center'):
         pen.color(color)
@@ -195,11 +176,13 @@ class Game:
 
     def draw_background(self):
         self.static.clear()
-        self.rectangle(-460, -165, 460, -157, '#304364')
-        self.rectangle(-465, -176, 465, -168, '#17243d')
+        self.rectangle(-480, -190, 480, 228, COLORS['panel'])
+        self.rectangle(-460, -165, 460, -157, COLORS['panel_light'])
+        self.rectangle(-465, -176, 465, -168, '#111d34')
+        self.rectangle(-470, 236, 470, 242, GOLD)
 
         self.write(self.static, 0, 283, 'GUESS WHICH CUP!', 32, GOLD)
-        self.write(self.static, 0, 251, '@RENE', 12, MUTED)
+        self.write(self.static, 0, 251, 'A memory game in Python Turtle', 12, MUTED)
 
         self.write(
             self.static, 0, -309,
@@ -208,8 +191,8 @@ class Game:
         )
 
     def draw_button(self, name, text, x, y, width, active=False):
-        color = '#e3b132' if active else '#293a5b'
-        edge = GOLD if active else '#627495'
+        color = COLORS['gold_dark'] if active else COLORS['panel_light']
+        edge = GOLD if active else '#52698f'
 
         self.rectangle(
             x - width / 2, y - 19,
@@ -362,18 +345,7 @@ class Game:
         return int(self.scores.get(self.best_key(), 0))
 
     def save_high_score(self):
-        if self.score <= self.best_score():
-            return
-
-        self.scores[self.best_key()] = self.score
-
-        try:
-            SAVE_FILE.write_text(
-                json.dumps(self.scores, indent=2),
-                encoding='utf-8'
-            )
-        except OSError:
-            pass
+        save_score(SAVE_FILE, self.scores, self.best_key(), self.score)
 
     def start_game(self):
         self.score = 0
@@ -478,6 +450,8 @@ class Game:
         )
 
         tone('reveal', self.screen)
+        self.screen.listen()
+        self.screen.update()
 
     def begin_shuffle(self):
         self.state = 'shuffle'
@@ -576,6 +550,7 @@ class Game:
             self.score += points
             self.save_high_score()
             self.draw_hud()
+            self.screen.update()
             tone('correct', self.screen)
 
             if self.mode == 'Story' and self.level >= STORY_LEVELS:
@@ -625,6 +600,7 @@ class Game:
                 self.perfect = False
 
             self.draw_hud()
+            self.screen.update()
             tone('wrong', self.screen)
 
             if self.lives > 0:
@@ -645,7 +621,7 @@ class Game:
 
     def on_click(self, x, y):
         if self.state == 'menu':
-            for key, (x1, y1, x2, y2) in self.buttons.items():
+            for key, (x1, y1, x2, y2) in list(self.buttons.items()):
                 if x1 <= x <= x2 and y1 <= y <= y2:
 
                     if key.startswith('mode:'):
@@ -673,9 +649,12 @@ class Game:
 
         elif self.state == 'select':
             for cup in self.cups:
-                if abs(x - cup.x) <= 43 and -53 <= y <= 55:
+                if abs(x - cup.x) <= 45 and -125 <= y <= 75:
                     self.choose(cup.slot)
                     return
+
+        elif self.state in ('result', 'retry', 'over', 'victory'):
+            self.advance()
 
     def advance(self):
         if self.state == 'menu':
@@ -711,7 +690,7 @@ class Game:
             self.screen.update()
             self.screen.ontimer(self.update, FRAME_MS)
 
-        except (turtle.Terminator, tkinter.TclError):
+        except (turtle.Terminator, tkinter.TclError, AttributeError):
             return
 
 
