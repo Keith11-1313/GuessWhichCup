@@ -616,11 +616,11 @@ class Game:
         else:
             self.lives -= 1
 
-            # Wrong answer breaks Endless combo
+            # Combo Break
             if self.mode == 'Endless':
                 self.combo = 0
 
-            # Wrong answer removes Story perfect status
+            # Perfect Break
             else:
                 self.perfect = False
 
