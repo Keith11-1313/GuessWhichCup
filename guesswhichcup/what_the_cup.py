@@ -1,5 +1,3 @@
-
-
 import json
 import math
 import random
@@ -14,14 +12,16 @@ SAVE_FILE = ROOT / 'what_the_cup_scores.json'
 WIDTH, HEIGHT = 1000, 700
 FRAME_MS = 17
 STORY_LEVELS = 10
+
 BG = '#131a2e'
 WHITE = '#f4f7ff'
 MUTED = '#b8c4e1'
 GOLD = '#f9cf49'
+
 DIFFICULTIES = {
     'Easy':   {'extra_swaps': 0, 'duration': 1.35, 'reveal': 1.45, 'lives': 5},
     'Normal': {'extra_swaps': 2, 'duration': 1.00, 'reveal': 1.00, 'lives': 3},
-    'Hard':   {'extra_swaps': 5, 'duration': 0.72, 'reveal': 0.70, 'lives': 2},
+    'Hard':   {'extra_swaps': 5, 'duration': 0.72, 'reveal': 0.70, 'lives': 1},
 }
 
 
@@ -52,17 +52,23 @@ def make_writer(color=WHITE):
 
 def tone(kind, screen):
     sounds = {
-        'reveal': [(700, 90)], 'correct': [(700, 80), (1000, 130)],
-        'wrong': [(330, 150), (240, 180)], 'win': [(620, 70), (820, 80), (1100, 140)]
+        'reveal': [(700, 90)],
+        'correct': [(700, 80), (1000, 130)],
+        'wrong': [(330, 150), (240, 180)],
+        'win': [(620, 70), (820, 80), (1100, 140)]
     }
+
     if sys.platform == 'win32':
         try:
             import winsound
-            # MessageBeep doesn't block the GUI animation like Beep does.
-            winsound.MessageBeep(winsound.MB_OK if kind in ('correct', 'win') else winsound.MB_ICONEXCLAMATION)
+            winsound.MessageBeep(
+                winsound.MB_OK if kind in ('correct', 'win')
+                else winsound.MB_ICONEXCLAMATION
+            )
             return
         except (ImportError, RuntimeError, OSError):
             pass
+
     try:
         screen.getcanvas().bell()
     except Exception:
@@ -92,10 +98,13 @@ class Cup:
 class Game:
     def __init__(self):
         if not CUP_GIF.exists():
-            raise FileNotFoundError('cup.gif is missing. Extract the entire ZIP into one folder.')
+            raise FileNotFoundError(
+                'cup.gif is missing. Extract the entire ZIP into one folder.'
+            )
+
         self.screen = turtle.Screen()
         self.screen.setup(WIDTH, HEIGHT)
-        self.screen.title('GUESS WHICH CUP!| by @RENE')
+        self.screen.title('GUESS WHICH CUP! | by @RENE')
         self.screen.bgcolor(BG)
         self.screen.tracer(0)
         self.screen.register_shape('gold_cup', str(CUP_GIF))
@@ -105,6 +114,7 @@ class Game:
         self.hud_text = make_writer()
         self.message = make_writer()
         self.labels = make_writer(MUTED)
+
         self.ball = turtle.Turtle(visible=False)
         self.ball.speed(0)
         self.ball.penup()
@@ -118,6 +128,11 @@ class Game:
         self.level = 1
         self.score = 0
         self.lives = 3
+
+        # Endless combo and Story perfect tracking
+        self.combo = 0
+        self.perfect = True
+
         self.state = 'menu'
         self.cups = []
         self.slots = []
@@ -129,19 +144,28 @@ class Game:
         self.completed_swaps = 0
         self.swap_pair = None
         self.swap_frame = 0
-        self.result_good = False
         self.buttons = {}
 
         self.screen.onclick(self.on_click)
         self.screen.listen()
+
         for key in ('Return', 'space'):
             self.screen.onkeypress(self.advance, key)
+
         for key in ('m', 'M'):
             self.screen.onkeypress(self.show_menu, key)
+
+        for key in ('h', 'H'):
+            self.screen.onkeypress(self.show_how_to_play, key)
+
         for key in ('r', 'R'):
             self.screen.onkeypress(self.restart, key)
+
         for n in range(1, 7):
-            self.screen.onkeypress(lambda number=n: self.choose(number - 1), str(n))
+            self.screen.onkeypress(
+                lambda number=n: self.choose(number - 1), str(n)
+            )
+
         self.screen.onkeypress(self.screen.bye, 'Escape')
         self.show_menu()
         self.screen.ontimer(self.update, FRAME_MS)
@@ -159,11 +183,13 @@ class Game:
         p.color(outline or fill, fill)
         p.pendown()
         p.begin_fill()
+
         for _ in range(2):
             p.forward(x2 - x1)
             p.left(90)
             p.forward(y2 - y1)
             p.left(90)
+
         p.end_fill()
         p.penup()
 
@@ -171,25 +197,101 @@ class Game:
         self.static.clear()
         self.rectangle(-460, -165, 460, -157, '#304364')
         self.rectangle(-465, -176, 465, -168, '#17243d')
+
         self.write(self.static, 0, 283, 'GUESS WHICH CUP!', 32, GOLD)
         self.write(self.static, 0, 251, '@RENE', 12, MUTED)
-        self.write(self.static, 0, -309,
-                   'CLICK A CUP or 1–6   •   ENTER: continue   •   R: restart   •   M: menu   •   ESC: exit',
-                   11, MUTED)
+
+        self.write(
+            self.static, 0, -309,
+            'CLICK A CUP or 1–6   •   ENTER: continue   •   R: restart   •   M: menu   •   H: help   •   ESC: exit',
+            10, MUTED
+        )
 
     def draw_button(self, name, text, x, y, width, active=False):
         color = '#e3b132' if active else '#293a5b'
         edge = GOLD if active else '#627495'
-        self.rectangle(x-width/2, y-19, x+width/2, y+19, color, edge)
-        self.write(self.menu_text, x, y-7, text, 13, '#111b30' if active else WHITE)
-        self.buttons[name] = (x-width/2, y-19, x+width/2, y+19)
+
+        self.rectangle(
+            x - width / 2, y - 19,
+            x + width / 2, y + 19,
+            color, edge
+        )
+
+        self.write(
+            self.menu_text, x, y - 7, text, 13,
+            '#111b30' if active else WHITE
+        )
+
+        self.buttons[name] = (
+            x - width / 2, y - 19,
+            x + width / 2, y + 19
+        )
 
     def clear_cups(self):
         for cup in self.cups:
             cup.hide()
+
         self.cups = []
         self.ball.hideturtle()
         self.labels.clear()
+
+    # HOW TO PLAY
+
+    def show_how_to_play(self):
+        self.state = 'how_to_play'
+        self.clear_cups()
+        self.draw_background()
+        self.menu_text.clear()
+        self.hud_text.clear()
+        self.message.clear()
+        self.buttons = {}
+
+        self.write(self.menu_text, 0, 175, 'HOW TO PLAY', 26, GOLD)
+
+        self.write(
+            self.menu_text, 0, 125,
+            'MEMORIZE  →  FOLLOW  →  GUESS',
+            16, WHITE
+        )
+
+        self.write(
+            self.menu_text, 0, 70,
+            'Watch the golden ball under a cup.',
+            13, MUTED
+        )
+
+        self.write(
+            self.menu_text, 0, 35,
+            'Keep your eyes on that cup while they shuffle.',
+            13, MUTED
+        )
+
+        self.write(
+            self.menu_text, 0, 0,
+            'When the shuffle ends, choose the cup you followed.',
+            13, MUTED
+        )
+
+        self.write(
+            self.menu_text, 0, -50,
+            'CLICK A CUP or press 1–6',
+            14, GOLD
+        )
+
+        self.write(
+            self.menu_text, 0, -90,
+            'Correct = + points   •   Wrong = - 1 life',
+            12, MUTED
+        )
+
+        self.draw_button(
+            'back', 'BACK TO MENU',
+            0, -175, 240, True
+        )
+
+        self.screen.update()
+
+    # MENU
 
     def show_menu(self):
         self.state = 'menu'
@@ -199,18 +301,58 @@ class Game:
         self.hud_text.clear()
         self.message.clear()
         self.buttons = {}
+
         self.write(self.menu_text, 0, 181, 'Choose your game mode', 19)
-        self.draw_button('mode:Story', 'STORY  (10 levels)', -180, 120, 250, self.mode == 'Story')
-        self.draw_button('mode:Endless', 'ENDLESS', 180, 120, 250, self.mode == 'Endless')
+
+        self.draw_button(
+            'mode:Story', 'STORY  (10 levels)',
+            -180, 120, 250, self.mode == 'Story'
+        )
+
+        self.draw_button(
+            'mode:Endless', 'ENDLESS',
+            180, 120, 250, self.mode == 'Endless'
+        )
+
         self.write(self.menu_text, 0, 56, 'Choose your difficulty', 19)
-        self.draw_button('diff:Easy', 'EASY  •  5 lives', -250, -1, 185, self.difficulty == 'Easy')
-        self.draw_button('diff:Normal', 'NORMAL  •  3 lives', 0, -1, 185, self.difficulty == 'Normal')
-        self.draw_button('diff:Hard', 'HARD  •  2 lives', 250, -1, 185, self.difficulty == 'Hard')
-        self.draw_button('start', 'START GAME', 0, -97, 270, True)
-        self.write(self.menu_text, 0, -215,
-                   'Story: clear all 10 levels  |  Endless: survive as long as you can', 13, MUTED)
-        self.write(self.menu_text, 0, -242,
-                   'Higher difficulty = faster shuffles, more swaps and shorter reveals', 11, MUTED)
+
+        self.draw_button(
+            'diff:Easy', 'EASY  •  5 lives',
+            -250, -1, 185, self.difficulty == 'Easy'
+        )
+
+        self.draw_button(
+            'diff:Normal', 'NORMAL  •  3 lives',
+            0, -1, 185, self.difficulty == 'Normal'
+        )
+
+        self.draw_button(
+            'diff:Hard', 'HARD  •  1 life',
+            250, -1, 185, self.difficulty == 'Hard'
+        )
+
+        self.draw_button(
+            'start', 'START GAME',
+            0, -97, 270, True
+        )
+
+        self.draw_button(
+            'howto', 'HOW TO PLAY',
+            0, -148, 270
+        )
+
+        self.write(
+            self.menu_text, 0, -215,
+            'Story: clear all 10 levels  |  Endless: survive as long as you can',
+            13, MUTED
+        )
+
+        self.write(
+            self.menu_text, 0, -242,
+            'Higher difficulty = faster shuffles, more swaps and shorter reveals',
+            11, MUTED
+        )
+
         self.screen.update()
 
     def best_key(self):
@@ -222,9 +364,14 @@ class Game:
     def save_high_score(self):
         if self.score <= self.best_score():
             return
+
         self.scores[self.best_key()] = self.score
+
         try:
-            SAVE_FILE.write_text(json.dumps(self.scores, indent=2), encoding='utf-8')
+            SAVE_FILE.write_text(
+                json.dumps(self.scores, indent=2),
+                encoding='utf-8'
+            )
         except OSError:
             pass
 
@@ -232,22 +379,59 @@ class Game:
         self.score = 0
         self.level = 1
         self.lives = DIFFICULTIES[self.difficulty]['lives']
+
+        # Reset combo/perfect for a new game
+        self.combo = 0
+        self.perfect = True
+
         self.start_level()
 
     def draw_hud(self):
         self.hud_text.clear()
-        self.write(self.hud_text, -427, 207,
-                   f'{self.mode.upper()}  |  {self.difficulty.upper()}  |  LEVEL {self.level}',
-                   14, WHITE, 'left')
-        self.write(self.hud_text, -427, 170, f'LIVES: {"♥" * self.lives}', 15, '#ff8294', 'left')
-        self.write(self.hud_text, 430, 207, f'SCORE: {self.score}', 14, GOLD, 'right')
-        self.write(self.hud_text, 430, 170, f'BEST: {self.best_score()}', 14, MUTED, 'right')
-        if self.mode == 'Story':
-            self.write(self.hud_text, 0, 213, f'CHAPTER {self.level}/{STORY_LEVELS}', 13, MUTED)
 
-    def set_message(self, text, detail=''):
+        self.write(
+            self.hud_text, -427, 207,
+            f'{self.mode.upper()}  |  {self.difficulty.upper()}  |  LEVEL {self.level}',
+            14, WHITE, 'left'
+        )
+
+        self.write(
+            self.hud_text, -427, 170,
+            f'LIVES: {"♥" * self.lives}',
+            15, '#ff8294', 'left'
+        )
+
+        self.write(
+            self.hud_text, 430, 207,
+            f'SCORE: {self.score}',
+            14, GOLD, 'right'
+        )
+
+        self.write(
+            self.hud_text, 430, 170,
+            f'BEST: {self.best_score()}',
+            14, MUTED, 'right'
+        )
+
+        # Endless shows COMBO
+        if self.mode == 'Endless':
+            self.write(
+                self.hud_text, 430, 145,
+                f'COMBO: x{self.combo}',
+                14, GOLD, 'right'
+            )
+
+        if self.mode == 'Story':
+            self.write(
+                self.hud_text, 0, 213,
+                f'CHAPTER {self.level}/{STORY_LEVELS}',
+                13, MUTED
+            )
+
+    def set_message(self, text, detail='', color=WHITE):
         self.message.clear()
-        self.write(self.message, 0, -214, text, 18, WHITE)
+        self.write(self.message, 0, -214, text, 18, color)
+
         if detail:
             self.write(self.message, 0, -246, detail, 12, MUTED)
 
@@ -257,126 +441,256 @@ class Game:
         self.menu_text.clear()
         self.buttons = {}
         self.draw_hud()
-        count, self.swaps, self.swap_duration, self.reveal_frames = level_settings(self.level, self.difficulty)
-        spacing = min(150, 760 / max(1, count-1))
-        self.slots = [(i - (count-1)/2)*spacing for i in range(count)]
-        self.cups = [Cup(i, self.slots[i]) for i in range(count)]
+
+        count, self.swaps, self.swap_duration, self.reveal_frames = \
+            level_settings(self.level, self.difficulty)
+
+        spacing = min(150, 760 / max(1, count - 1))
+        self.slots = [
+            (i - (count - 1) / 2) * spacing
+            for i in range(count)
+        ]
+
+        self.cups = [
+            Cup(i, self.slots[i])
+            for i in range(count)
+        ]
+
         for i, x in enumerate(self.slots):
-            self.write(self.labels, x, -107, str(i+1), 15, MUTED)
+            self.write(self.labels, x, -107, str(i + 1), 15, MUTED)
+
         self.correct_id = random.randrange(count)
         self.reveal_frame = 0
         self.completed_swaps = 0
         self.swap_pair = None
         self.state = 'reveal'
+
         special = self.cups[self.correct_id]
         special.y = 76
         special.render()
+
         self.ball.goto(special.x, -40)
         self.ball.showturtle()
-        self.set_message('MEMORIZE THE BALL!', 'Follow the golden cup when it moves.')
+
+        self.set_message(
+            'MEMORIZE THE BALL!',
+            'Follow the golden cup when it moves.'
+        )
+
         tone('reveal', self.screen)
 
     def begin_shuffle(self):
         self.state = 'shuffle'
         self.ball.hideturtle()
+
         for cup in self.cups:
             cup.y = 0
             cup.render()
-        self.set_message('SHUFFLING...', f'Watch closely: {self.swaps} swaps this round.')
+
+        self.set_message(
+            'SHUFFLING...',
+            f'Watch closely: {self.swaps} swaps this round.'
+        )
 
     def animate_swap(self):
         if self.swap_pair is None:
             if self.completed_swaps >= self.swaps:
                 self.state = 'select'
-                self.set_message('WHERE IS THE BALL?', 'Click a cup or press its number (1–6).')
+                self.set_message(
+                    'WHERE IS THE BALL?',
+                    'Click a cup or press its number (1–6).'
+                )
                 return
+
             a, b = random.sample(self.cups, 2)
             self.swap_pair = (a, b, a.slot, b.slot)
             self.swap_frame = 0
+
         a, b, slot_a, slot_b = self.swap_pair
         self.swap_frame += 1
-        t = min(1.0, self.swap_frame/self.swap_duration)
-        eased = t*t*(3 - 2*t)
-        a.x = self.slots[slot_a] + (self.slots[slot_b]-self.slots[slot_a])*eased
-        b.x = self.slots[slot_b] + (self.slots[slot_a]-self.slots[slot_b])*eased
-        arc = math.sin(math.pi*t)*37
+
+        t = min(1.0, self.swap_frame / self.swap_duration)
+        eased = t * t * (3 - 2 * t)
+
+        a.x = self.slots[slot_a] + \
+            (self.slots[slot_b] - self.slots[slot_a]) * eased
+
+        b.x = self.slots[slot_b] + \
+            (self.slots[slot_a] - self.slots[slot_b]) * eased
+
+        arc = math.sin(math.pi * t) * 37
         a.y = arc
         b.y = -arc
+
         a.render()
         b.render()
+
         if t >= 1:
             a.slot, b.slot = slot_b, slot_a
             a.x, b.x = self.slots[a.slot], self.slots[b.slot]
             a.y = b.y = 0
+
             a.render()
             b.render()
+
             self.completed_swaps += 1
             self.swap_pair = None
 
     def choose(self, slot):
         if self.state != 'select':
             return
-        selected = next((cup for cup in self.cups if cup.slot == slot), None)
+
+        selected = next(
+            (cup for cup in self.cups if cup.slot == slot), None
+        )
+
         if selected is None:
             return
+
         correct = self.cups[self.correct_id]
+
         selected.y = 76
         selected.render()
         correct.y = 76
         correct.render()
+
         self.ball.goto(correct.x, -40)
         self.ball.showturtle()
+
         if selected is correct:
-            self.score += self.level * 100 + (self.lives-1)*20
+
+            # ENDLESS COMBO
+            if self.mode == 'Endless':
+                self.combo += 1
+                combo_bonus = self.combo * 25
+                points = (
+                    self.level * 100
+                    + (self.lives - 1) * 20
+                    + combo_bonus
+                )
+
+            # STORY NORMAL SCORING
+            else:
+                points = self.level * 100 + (self.lives - 1) * 20
+
+            self.score += points
             self.save_high_score()
             self.draw_hud()
             tone('correct', self.screen)
+
             if self.mode == 'Story' and self.level >= STORY_LEVELS:
                 self.state = 'victory'
-                self.set_message('STORY COMPLETE! YOU ARE THE CUP MASTER!',
-                                 f'Final score: {self.score}  •  ENTER: play again  •  M: menu')
+
+                # PERFECT STORY BONUS
+                if self.perfect:
+                    self.score += 1000
+                    self.save_high_score()
+
+                    self.set_message(
+                        'PERFECT STORY RUN!',
+                        f'+1000 PERFECT BONUS  •  Final score: {self.score}  •  ENTER: play again  •  M: menu',
+                        GOLD
+                    )
+                else:
+                    self.set_message(
+                        'STORY COMPLETE! YOU ARE THE CUP MASTER!',
+                        f'Final score: {self.score}  •  ENTER: play again  •  M: menu'
+                    )
+
                 tone('win', self.screen)
+
             else:
                 self.state = 'result'
-                self.set_message('CORRECT! GREAT MEMORY!',
-                                 f'+{self.level*100+(self.lives-1)*20} points  •  ENTER: next level')
+
+                if self.mode == 'Endless':
+                    self.set_message(
+                        f'CORRECT! COMBO x{self.combo}!',
+                        f'+{points} points  •  ENTER: next round'
+                    )
+                else:
+                    self.set_message(
+                        'CORRECT! GREAT MEMORY!',
+                        f'+{points} points  •  ENTER: next level'
+                    )
+
         else:
             self.lives -= 1
+
+            # Wrong answer breaks Endless combo
+            if self.mode == 'Endless':
+                self.combo = 0
+
+            # Wrong answer removes Story perfect status
+            else:
+                self.perfect = False
+
             self.draw_hud()
             tone('wrong', self.screen)
+
             if self.lives > 0:
                 self.state = 'retry'
-                self.set_message('WRONG CUP!', f'{self.lives} lives left  •  ENTER: retry level')
+
+                self.set_message(
+                    'WRONG CUP!',
+                    f'{self.lives} lives left  •  ENTER: retry level'
+                )
+
             else:
                 self.state = 'over'
-                self.set_message('GAME OVER!', f'Score: {self.score}  •  ENTER: retry  •  M: menu')
+
+                self.set_message(
+                    'GAME OVER!',
+                    f'Score: {self.score}  •  ENTER: retry  •  M: menu'
+                )
 
     def on_click(self, x, y):
         if self.state == 'menu':
             for key, (x1, y1, x2, y2) in self.buttons.items():
                 if x1 <= x <= x2 and y1 <= y <= y2:
+
                     if key.startswith('mode:'):
                         self.mode = key.split(':', 1)[1]
                         self.show_menu()
+
                     elif key.startswith('diff:'):
                         self.difficulty = key.split(':', 1)[1]
                         self.show_menu()
+
                     elif key == 'start':
                         self.start_game()
+
+                    elif key == 'howto':
+                        self.show_how_to_play()
+
                     return
+
+        elif self.state == 'how_to_play':
+            if 'back' in self.buttons:
+                x1, y1, x2, y2 = self.buttons['back']
+
+                if x1 <= x <= x2 and y1 <= y <= y2:
+                    self.show_menu()
+
         elif self.state == 'select':
-            # Actual hitbox approximates 81x108 cup sprite, centered at y=0.
             for cup in self.cups:
-                if abs(x-cup.x) <= 43 and -53 <= y <= 55:
+                if abs(x - cup.x) <= 43 and -53 <= y <= 55:
                     self.choose(cup.slot)
                     return
 
     def advance(self):
-        if self.state in ('menu', 'over', 'victory'):
+        if self.state == 'menu':
             self.start_game()
+
+        elif self.state == 'how_to_play':
+            self.show_menu()
+
+        elif self.state in ('over', 'victory'):
+            self.start_game()
+
         elif self.state == 'result':
             self.level += 1
             self.start_level()
+
         elif self.state == 'retry':
             self.start_level()
 
@@ -387,12 +701,16 @@ class Game:
         try:
             if self.state == 'reveal':
                 self.reveal_frame += 1
+
                 if self.reveal_frame >= self.reveal_frames:
                     self.begin_shuffle()
+
             elif self.state == 'shuffle':
                 self.animate_swap()
+
             self.screen.update()
             self.screen.ontimer(self.update, FRAME_MS)
+
         except (turtle.Terminator, tkinter.TclError):
             return
 
