@@ -122,7 +122,7 @@ class GameScreens:
             self.session.static,
             467,
             288,
-            "Lantern House",
+            "Bahay Lantern",
             16,
             GOLD,
             "right",
