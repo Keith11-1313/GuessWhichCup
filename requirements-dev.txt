@@ -1,0 +1,2 @@
+# Optional formatter only. The game uses Python's standard library.
+black==26.5.1

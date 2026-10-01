@@ -7,11 +7,14 @@ import tempfile
 
 def load_scores(path):
     try:
-        data = json.loads(path.read_text(encoding='utf-8'))
+        data = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             return {}
-        return {key: value for key, value in data.items()
-                if isinstance(key, str) and type(value) is int and value >= 0}
+        return {
+            key: value
+            for key, value in data.items()
+            if isinstance(key, str) and type(value) is int and value >= 0
+        }
     except (OSError, ValueError):
         return {}
 
@@ -26,8 +29,14 @@ def save_score(path, scores, key, score):
     updated = dict(scores, **{key: score})
     temporary = None
     try:
-        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8',
-                dir=path.parent, prefix=path.name + '.', suffix='.tmp', delete=False) as file:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=path.name + ".",
+            suffix=".tmp",
+            delete=False,
+        ) as file:
             temporary = file.name
             json.dump(updated, file, indent=2)
             file.flush()

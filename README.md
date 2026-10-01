@@ -61,7 +61,11 @@ Story runs restart at chapter 1; chapter rewards and cups persist.
 
 ## Project map
 
-- `what_the_cup.py`: screens, input, state machine and elapsed-time animation.
+- `what_the_cup.py`: shared session setup, application entry and timer loop.
+- `game_screens.py`: menu, story, HUD, messages and common drawing helpers.
+- `round_logic.py`: round setup, shuffling, scoring and win/loss resolution.
+- `input_controls.py`: keyboard bindings, click routing and navigation.
+- `game_objects.py`: cup sprites, click targets, text pens and sound feedback.
 - `game_config.py`: level scaling, colors and paths.
 - `party_art.py`: original pixel sprites and five setting-specific backgrounds.
 - `party_story.py`: narrative beats and chapter locations.
@@ -70,6 +74,19 @@ Story runs restart at chapter 1; chapter rewards and cups persist.
 - `score_store.py`: validated high-score loading and atomic writes.
 - `test_game.py`: deterministic gameplay, collection and layout regression tests.
 - `qa_player_flow.py`: real Tk mouse/key-event player-flow QA with temporary saves.
+
+`Game` combines four small behavior classes: `GameScreens`, `RoundLogic`,
+`InputControls`, and `CupCabinet`. These classes share the same Game instance;
+they do not keep separate copies of the score, cups or screen state. Each
+method has one owner, so changes to rendering live in the screen module and
+changes to scoring live in the round module.
+
+To trace a guess, start at `InputControls.on_click()`, which calls
+`RoundLogic.choose()`. A correct guess goes to `resolve_correct_guess()`;
+a mistake goes to `resolve_wrong_guess()`. The result is drawn through
+`GameScreens.set_message()`. `Game.update()` advances animations and refreshes
+the window. The state gates in these methods prevent repeated input from
+awarding a round twice.
 
 The game uses built-in Turtle/Tkinter, original pixel title lettering,
 nearest-pixel cup sprites and Segoe UI body text (system fallback elsewhere).
@@ -89,6 +106,9 @@ Endless, and pause. It takes a few minutes.
 
 Optional screenshots: `python -B qa_player_flow.py --screenshots PATH`.
 Only that developer screenshot option needs Pillow.
+
+For consistent formatting, optionally install `requirements-dev.txt`, then
+run `python -m black .`. The formatter is not required to play or test the game.
 
 ## Research applied
 
