@@ -2,7 +2,7 @@
 
 import time
 from game_config import DIFFICULTIES, RESULT_BUTTON_BOUNDS
-from game_objects import tone
+import cup_collection as collection
 
 
 def point_in_rectangle(x, y, bounds):
@@ -11,165 +11,191 @@ def point_in_rectangle(x, y, bounds):
 
 
 class InputControls:
-    """Input methods mixed into Game; no separate game state is stored here."""
+    """Route input through explicit view, round and cabinet dependencies."""
+
+    def __init__(self, session, views, rounds, cabinet):
+        self.session = session
+        self.views = views
+        self.rounds = rounds
+        self.cabinet = cabinet
 
     def button_at(self, x, y):
         """Find the first visible button whose bounds contain the click."""
-        for name, bounds in list(self.buttons.items()):
+        for name, bounds in list(self.session.buttons.items()):
             if point_in_rectangle(x, y, bounds):
                 return name
         return None
 
     def on_click(self, x, y):
         """Route a click according to the current screen or round phase."""
-        if self.state == "select":
-            for cup in self.cups:
+        if self.session.state == "select":
+            for cup in self.session.cups:
                 if cup.contains(x, y):
-                    self.choose(cup.slot)
+                    self.rounds.choose(cup.slot)
                     return
-        elif self.state in ("result", "retry", "over", "victory"):
+        elif self.session.state in ("result", "retry", "over", "victory"):
             if point_in_rectangle(x, y, RESULT_BUTTON_BOUNDS):
                 self.advance()
         else:
             button = self.button_at(x, y)
             if button is None:
                 return
-            if self.state == "menu":
+            if self.session.state == "menu":
                 self.menu_action(button)
-            elif self.state in ("story", "cabinet", "odds", "gacha_reveal"):
+            elif self.session.state in ("story", "cabinet", "odds", "gacha_reveal"):
                 self.collection_action(button)
-            elif self.state == "how_to_play" and button == "back":
-                self.show_menu()
+            elif self.session.state == "how_to_play" and button == "back":
+                self.views.show_menu()
 
     def menu_action(self, button):
         """Apply one menu choice and redraw only when its setting changes."""
         if button.startswith("mode:"):
-            self.mode = button.split(":", 1)[1]
-            self.show_menu()
+            self.session.mode = button.split(":", 1)[1]
+            self.views.show_menu()
         elif button.startswith("diff:"):
-            self.difficulty = button.split(":", 1)[1]
-            self.show_menu()
+            self.session.difficulty = button.split(":", 1)[1]
+            self.views.show_menu()
         elif button == "start":
-            self.start_game()
+            self.rounds.start_game()
         elif button == "cabinet":
-            self.show_cabinet()
+            self.cabinet.show_cabinet()
         elif button == "howto":
-            self.show_how_to_play()
+            self.views.show_how_to_play()
 
     def open_cabinet_from_menu(self):
-        if self.state == "menu":
-            self.show_cabinet()
+        if self.session.state == "menu":
+            self.cabinet.show_cabinet()
 
     def advance(self):
-        if self.state == "menu":
-            self.start_game()
+        if self.session.state == "menu":
+            self.rounds.start_game()
 
-        elif self.state == "how_to_play":
-            self.show_menu()
+        elif self.session.state == "how_to_play":
+            self.views.show_menu()
 
-        elif self.state == "story":
-            if self.story_page == 0:
-                self.story_page = 1
-                self.show_story()
+        elif self.session.state == "story":
+            if self.session.story_page == 0:
+                self.session.story_page = 1
+                self.views.show_story()
             else:
-                self.start_level()
+                self.rounds.start_level()
 
-        elif self.state == "gacha_reveal":
-            self.show_cabinet()
+        elif self.session.state == "gacha_reveal":
+            self.cabinet.show_cabinet()
 
-        elif self.state == "gacha_opening":
-            self.reveal_draw()
+        elif self.session.state == "gacha_opening":
+            self.cabinet.reveal_draw()
 
-        elif self.state == "cabinet":
-            self.draw_cup()
+        elif self.session.state == "cabinet":
+            self.cabinet.draw_cup()
 
-        elif self.state in ("over", "victory"):
-            self.start_game()
+        elif self.session.state in ("over", "victory"):
+            self.rounds.start_game()
 
-        elif self.state == "result":
-            self.level += 1
-            self.begin_chapter()
+        elif self.session.state == "result":
+            self.session.level += 1
+            self.rounds.begin_chapter()
 
-        elif self.state == "retry":
-            self.start_level()
+        elif self.session.state == "retry":
+            self.rounds.start_level()
 
     def restart(self):
-        self.start_game()
-
-    def play_tone(self, kind):
-        if self.sound_enabled:
-            tone(kind, self.screen)
+        self.rounds.start_game()
 
     def toggle_sound(self):
-        self.sound_enabled = not self.sound_enabled
-        self.screen.title(
+        self.session.sound_enabled = not self.session.sound_enabled
+        self.session.screen.title(
             "Guess Which Cup | Lantern House | Sound "
-            + ("on" if self.sound_enabled else "off")
+            + ("on" if self.session.sound_enabled else "off")
         )
 
     def cycle_mode(self):
-        if self.state == "menu":
-            self.mode = "Endless" if self.mode == "Story" else "Story"
-            self.show_menu()
+        if self.session.state == "menu":
+            self.session.mode = "Endless" if self.session.mode == "Story" else "Story"
+            self.views.show_menu()
 
     def cycle_difficulty(self, direction=1):
-        if self.state == "menu":
+        if self.session.state == "menu":
             names = list(DIFFICULTIES)
-            self.difficulty = names[
-                (names.index(self.difficulty) + direction) % len(names)
+            self.session.difficulty = names[
+                (names.index(self.session.difficulty) + direction) % len(names)
             ]
-            self.show_menu()
+            self.views.show_menu()
 
     def toggle_pause(self):
-        if self.state == "paused":
-            self.state = self.paused_state
-            self.last_tick = time.monotonic()
-            self.frame_credit = 0.0
-            if self.state == "select":
-                self.set_message("Where is the spark?", self.selection_hint())
-            elif self.state == "reveal":
-                self.set_message("Remember the spark", "Watch which cup holds it.")
+        if self.session.state == "paused":
+            self.session.state = self.session.paused_state
+            self.session.last_tick = time.monotonic()
+            self.session.frame_credit = 0.0
+            if self.session.state == "select":
+                self.views.set_message(
+                    "Where is the spark?", self.rounds.selection_hint()
+                )
+            elif self.session.state == "reveal":
+                self.views.set_message(
+                    "Remember the spark", "Watch which cup holds it."
+                )
             else:
-                self.set_message("Follow the cup", "")
-        elif self.state in ("reveal", "shuffle", "select"):
-            self.paused_state = self.state
-            self.state = "paused"
-            self.set_message("Paused", "")
+                self.views.set_message("Follow the cup", "")
+        elif self.session.state in ("reveal", "shuffle", "select"):
+            self.session.paused_state = self.session.state
+            self.session.state = "paused"
+            self.views.set_message("Paused", "")
 
     def escape(self):
-        if self.state == "menu":
-            self.close()
-        elif self.state in ("odds", "gacha_reveal", "gacha_opening"):
-            self.show_cabinet()
+        if self.session.state == "menu":
+            self.session.close()
+        elif self.session.state in ("odds", "gacha_reveal", "gacha_opening"):
+            self.cabinet.show_cabinet()
         else:
-            self.show_menu()
+            self.views.show_menu()
 
     def bind_controls(self):
-        self.screen.onclick(self.on_click)
-        self.screen.listen()
+        self.session.screen.onclick(self.on_click)
+        self.session.screen.listen()
 
         for key in ("Return", "space"):
-            self.screen.onkeypress(self.advance, key)
+            self.session.screen.onkeypress(self.advance, key)
 
         for key in ("m", "M"):
-            self.screen.onkeypress(self.show_menu, key)
+            self.session.screen.onkeypress(self.views.show_menu, key)
 
         for key in ("h", "H"):
-            self.screen.onkeypress(self.show_how_to_play, key)
+            self.session.screen.onkeypress(self.views.show_how_to_play, key)
 
         for key in ("r", "R"):
-            self.screen.onkeypress(self.restart, key)
+            self.session.screen.onkeypress(self.restart, key)
 
         for n in range(1, 7):
-            self.screen.onkeypress(lambda number=n: self.choose(number - 1), str(n))
+            self.session.screen.onkeypress(
+                lambda number=n: self.rounds.choose(number - 1), str(n)
+            )
 
-        self.screen.onkeypress(self.escape, "Escape")
-        self.screen.onkeypress(self.toggle_pause, "p")
-        self.screen.onkeypress(self.toggle_sound, "s")
-        self.screen.onkeypress(self.toggle_pause, "P")
-        self.screen.onkeypress(self.toggle_sound, "S")
+        self.session.screen.onkeypress(self.escape, "Escape")
+        self.session.screen.onkeypress(self.toggle_pause, "p")
+        self.session.screen.onkeypress(self.toggle_sound, "s")
+        self.session.screen.onkeypress(self.toggle_pause, "P")
+        self.session.screen.onkeypress(self.toggle_sound, "S")
         for key in ("c", "C"):
-            self.screen.onkeypress(self.open_cabinet_from_menu, key)
-        self.screen.onkeypress(self.cycle_mode, "Tab")
-        self.screen.onkeypress(lambda: self.cycle_difficulty(-1), "Left")
-        self.screen.onkeypress(self.cycle_difficulty, "Right")
+            self.session.screen.onkeypress(self.open_cabinet_from_menu, key)
+        self.session.screen.onkeypress(self.cycle_mode, "Tab")
+        self.session.screen.onkeypress(lambda: self.cycle_difficulty(-1), "Left")
+        self.session.screen.onkeypress(self.cycle_difficulty, "Right")
+
+    def collection_action(self, key):
+        if key == "story_next":
+            self.advance()
+        elif key == "draw":
+            self.cabinet.draw_cup()
+        elif key == "odds":
+            self.cabinet.show_odds()
+        elif key == "back":
+            self.views.show_menu()
+        elif key == "cabinet":
+            self.cabinet.show_cabinet()
+        elif key.startswith("equip:"):
+            skin = key.split(":", 1)[1]
+            if collection.equip(self.session.profile_path, self.session.profile, skin):
+                self.cabinet.show_cabinet("Cup equipped.")
+            else:
+                self.cabinet.show_cabinet("Could not save. Try again.")

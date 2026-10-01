@@ -4,6 +4,7 @@ Run python -B qa_player_flow.py. Optional --screenshots DIR needs Pillow.
 This is a developer QA tool; the game has no Pillow dependency.
 """
 
+from game_objects import input_canvas
 import argparse
 from pathlib import Path
 import tempfile
@@ -15,14 +16,15 @@ import cup_collection as collection
 
 
 def run(screenshot_dir=None):
-    saved_scores, saved_profile = app.SAVE_FILE, collection.PROFILE_FILE
     with tempfile.TemporaryDirectory() as folder:
-        app.SAVE_FILE = Path(folder) / "scores.json"
-        collection.PROFILE_FILE = Path(folder) / "profile.json"
-        game = app.Game(run_loop=False)
+        game = app.Game(
+            run_loop=False,
+            score_path=Path(folder) / "scores.json",
+            profile_path=Path(folder) / "profile.json",
+        )
         game.sound_enabled = False
         root = game.screen.getcanvas().winfo_toplevel()
-        canvas = game.screen.getcanvas()._canvas
+        canvas = input_canvas(game.screen)
         captured = []
 
         def pump(seconds=0.04):
@@ -59,6 +61,10 @@ def run(screenshot_dir=None):
                 from PIL import ImageGrab
 
                 screenshot_dir.mkdir(exist_ok=True, parents=True)
+                # ImageGrab captures desktop pixels, so the game must be on top.
+                root.lift()
+                root.focus_force()
+                pump(0.08)
                 game.screen.update()
                 root.update_idletasks()
                 ImageGrab.grab(
@@ -89,7 +95,7 @@ def run(screenshot_dir=None):
             capture("complete-draw-rare")
             button("equip:rare")
             assert (
-                collection.load_profile(collection.PROFILE_FILE)["equipped"] == "rare"
+                collection.load_profile(game.profile_path)["equipped"] == "rare"
             )
             button("back")
             button("diff:Easy")
@@ -104,9 +110,16 @@ def run(screenshot_dir=None):
                 assert game.state == "reveal"
                 assert {cup.sprite.shape() for cup in game.cups} == {"rare_cup"}
                 capture("complete-game-" + str(level))
+                wait_for("shuffle")
+                pump(0.3)
+                key("p")
+                assert game.state == "paused"
+                capture("complete-shuffle-" + str(level))
+                key("p")
                 wait_for("select")
                 assert (
-                    game.selection_hint() == f"Click a cup or press 1-{len(game.cups)}."
+                    game.rounds.selection_hint()
+                    == f"Click a cup or press 1-{len(game.cups)}."
                 )
                 capture("complete-select-" + str(len(game.cups)))
                 if level == 1:
@@ -144,7 +157,7 @@ def run(screenshot_dir=None):
             key("m")
             button("cabinet")
             assert game.profile["tickets"] == 11
-            assert collection.load_profile(collection.PROFILE_FILE) == game.profile
+            assert collection.load_profile(game.profile_path) == game.profile
             print(
                 "Verified real mouse/key story, retry, all cup counts, gacha, equip, saves, Endless and pause.",
                 flush=True,
@@ -171,8 +184,6 @@ def run(screenshot_dir=None):
                 sheet.save(screenshot_dir / "complete-review.png")
         finally:
             game.close()
-            app.SAVE_FILE = saved_scores
-            collection.PROFILE_FILE = saved_profile
 
 
 if __name__ == "__main__":

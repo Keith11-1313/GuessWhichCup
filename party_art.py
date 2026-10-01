@@ -48,9 +48,9 @@ def register_cup(screen):
                 ),
                 (x, y),
             )
-    screen._party_images = [image, image.zoom(3), image.zoom(5)]
-    screen.register_shape("party_cup", turtle.Shape("image", screen._party_images[1]))
-    screen.register_shape("hero_cup", turtle.Shape("image", screen._party_images[2]))
+    party_images = [image, image.zoom(3), image.zoom(5)]
+    screen.register_shape("party_cup", turtle.Shape("image", party_images[1]))
+    screen.register_shape("hero_cup", turtle.Shape("image", party_images[2]))
     palettes = {
         "normal": (
             "#ffe4a6",
@@ -132,7 +132,7 @@ def register_cup(screen):
         ),
     }
     source = palettes["normal"]
-    screen._skin_images = {}
+    skin_images = {}
     for skin, colors in palettes.items():
         art = tkinter.PhotoImage(width=32, height=34, master=screen.getcanvas())
         mapping = dict(zip(source, colors))
@@ -215,11 +215,11 @@ def register_cup(screen):
                     art.put(colors[0], (x, y - 1))
             for x, y in ((4, 8), (27, 25)):
                 art.put(colors[0], (x, y))
-        screen._skin_images[skin] = [art, art.zoom(2), art.zoom(3), art.zoom(5)]
+        skin_images[skin] = [art, art.zoom(2), art.zoom(3), art.zoom(5)]
         for name, index in (("preview", 1), ("cup", 2), ("hero", 3)):
             screen.register_shape(
                 skin + "_" + name,
-                turtle.Shape("image", screen._skin_images[skin][index]),
+                turtle.Shape("image", skin_images[skin][index]),
             )
     secret = tkinter.PhotoImage(width=32, height=34, master=screen.getcanvas())
     for y in range(34):
@@ -237,8 +237,8 @@ def register_cup(screen):
         (15, 19),
     ):
         secret.put("#cbb8c9", (x, y))
-    screen._secret_image = secret.zoom(2)
-    screen.register_shape("secret_preview", turtle.Shape("image", screen._secret_image))
+    secret_image = secret.zoom(2)
+    screen.register_shape("secret_preview", turtle.Shape("image", secret_image))
     spark = turtle.Shape("compound")
     for x, y, w, h, c in (
         (-9, -3, 18, 6, "#b77945"),
@@ -248,6 +248,7 @@ def register_cup(screen):
     ):
         spark.addcomponent(((x, y), (x + w, y), (x + w, y + h), (x, y + h)), c, c)
     screen.register_shape("spark", spark)
+    return {"party": party_images, "skins": skin_images, "secret": secret_image}
 
 
 def frame(game, x1, y1, x2, y2, fill="#241d30", edge="#715166"):
@@ -298,9 +299,11 @@ def guest(game, x, y, shirt, hair="#36263b", scale=3):
 def scenery(game, menu=False):
     r = game.rectangle
     left, right = (-470, -35) if menu else (-470, 470)
-    game.scene_location = "hall" if menu else location(game.mode, game.level)
-    if not menu and location(game.mode, game.level) != "hall":
-        environment(game, location(game.mode, game.level))
+    game.session.scene_location = (
+        "hall" if menu else location(game.session.mode, game.session.level)
+    )
+    if not menu and location(game.session.mode, game.session.level) != "hall":
+        environment(game, location(game.session.mode, game.session.level))
         return
     r(left, -174, right, 236, "#33283f")
     for x in range(left + 12, right - 8, 32):
@@ -339,8 +342,8 @@ def scenery(game, menu=False):
         r(x + 12, y - 10, x + 14, y - 8, "#ffe7ae")
     if menu:
         frame(game, -274, 93, -67, 177, "#292237")
-        game.write(game.static, -170, 146, "LANTERN HOUSE", 13, "#e7c795")
-        game.write(game.static, -170, 123, "Est. after sundown", 10, "#b59aaf")
+        game.write(game.session.static, -170, 146, "LANTERN HOUSE", 13, "#e7c795")
+        game.write(game.session.static, -170, 123, "Est. after sundown", 10, "#b59aaf")
         r(-283, 73, -60, 79, "#ad7959")
         for x, c in ((-260, "#879c8f"), (-244, "#b07988"), (-228, "#d4ae75")):
             r(x, 79, x + 10, 96, c)
@@ -352,7 +355,7 @@ def scenery(game, menu=False):
         r(-429, -152, -417, -108, "#654238")
         r(-83, -152, -71, -108, "#654238")
         r(-368, -83, -199, -77, "#62433d")
-        p = game.static
+        p = game.session.static
         p.shape("hero_cup")
         p.goto(-281, 5)
         p.stamp()
@@ -377,7 +380,7 @@ def environment(game, kind):
         "dawn": "#735761",
         "afterparty": "#241c3c",
     }[kind]
-    game.scene_location = kind
+    game.session.scene_location = kind
     r(-470, -174, 470, 236, wall)
     if kind == "kitchen":
         for y in range(40, 175, 22):
