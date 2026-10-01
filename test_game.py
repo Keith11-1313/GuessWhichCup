@@ -1,5 +1,6 @@
 """Regression tests. All score writes use a temporary directory."""
 
+from game_objects import input_canvas
 from pathlib import Path
 import random
 from collections import Counter
@@ -120,18 +121,16 @@ class GameTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.folder = tempfile.TemporaryDirectory()
-        cls.saved_path = app.SAVE_FILE
-        cls.profile_path = collection.PROFILE_FILE
-        collection.PROFILE_FILE = Path(cls.folder.name) / "profile.json"
-        app.SAVE_FILE = Path(cls.folder.name) / "scores.json"
-        cls.game = app.Game(run_loop=False)
+        cls.game = app.Game(
+            run_loop=False,
+            score_path=Path(cls.folder.name) / "scores.json",
+            profile_path=Path(cls.folder.name) / "profile.json",
+        )
         cls.game.sound_enabled = False
 
     @classmethod
     def tearDownClass(cls):
         cls.game.close()
-        app.SAVE_FILE = cls.saved_path
-        collection.PROFILE_FILE = cls.profile_path
         cls.folder.cleanup()
 
     def setUp(self):
@@ -140,24 +139,24 @@ class GameTests(unittest.TestCase):
         self.game.reward_failed = False
         self.game.mode = "Story"
         self.game.difficulty = "Normal"
-        self.game.show_menu()
+        self.game.views.show_menu()
 
     def enter_round(self):
         while self.game.state == "story":
-            self.game.advance()
+            self.game.controls.advance()
 
     def start_gameplay(self):
-        self.game.start_game()
+        self.game.rounds.start_game()
         self.enter_round()
 
     def finish_shuffle(self):
         self.enter_round()
         g = self.game
-        g.begin_shuffle()
+        g.rounds.begin_shuffle()
         for _ in range(g.swaps * (g.swap_duration + 1) + 2):
             if g.state == "select":
                 break
-            g.animate_swap()
+            g.rounds.animate_swap()
         self.assertEqual(g.state, "select")
         self.assertEqual(sorted(c.slot for c in g.cups), list(range(len(g.cups))))
         for cup in g.cups:
@@ -166,13 +165,13 @@ class GameTests(unittest.TestCase):
 
     def click_button(self, name):
         x1, y1, x2, y2 = self.game.buttons[name]
-        self.game.on_click((x1 + x2) / 2, (y1 + y2) / 2)
+        self.game.controls.on_click((x1 + x2) / 2, (y1 + y2) / 2)
 
     def test_contextual_cup_instructions(self):
         g = self.game
         for level, count in ((1, 3), (4, 4), (7, 5), (10, 6)):
             g.level = level
-            g.start_level()
+            g.rounds.start_level()
             self.finish_shuffle()
             text = " ".join(
                 g.screen.getcanvas().itemcget(i, "text")
@@ -183,11 +182,13 @@ class GameTests(unittest.TestCase):
             if count != 6:
                 self.assertNotIn("1-6", text)
             score, lives = g.score, g.lives
-            g.choose(count)
+            g.rounds.choose(count)
             self.assertEqual((g.score, g.lives, g.state), (score, lives, "select"))
-            g.toggle_pause()
-            g.toggle_pause()
-            self.assertEqual(g.selection_hint(), f"Click a cup or press 1-{count}.")
+            g.controls.toggle_pause()
+            g.controls.toggle_pause()
+            self.assertEqual(
+                g.rounds.selection_hint(), f"Click a cup or press 1-{count}."
+            )
 
     def test_new_screens_text_bounds_and_action_spacing(self):
         g = self.game
@@ -216,33 +217,33 @@ class GameTests(unittest.TestCase):
 
         for level in range(1, 11):
             g.level = level
-            g.begin_chapter()
+            g.rounds.begin_chapter()
             verify()
-            g.advance()
+            g.controls.advance()
             verify()
-        g.show_cabinet()
+        g.cabinet.show_cabinet()
         verify()
-        g.show_odds()
+        g.cabinet.show_odds()
         verify()
         for skin, roll in zip(
             ("normal", "uncommon", "rare", "epic", "legendary", "mythic"),
             (0, 5000, 7700, 9200, 9800, 9980),
         ):
             g.profile["tickets"] = 3
-            g.show_cabinet()
+            g.cabinet.show_cabinet()
             with patch("cup_collection.random.randrange", return_value=roll):
-                g.draw_cup()
-            g.advance()
+                g.cabinet.draw_cup()
+            g.controls.advance()
             verify()
         g.mode = "Endless"
-        g.start_game()
+        g.rounds.start_game()
         verify()
 
     def test_real_mouse_event_selects_number_button(self):
         g = self.game
         self.start_gameplay()
         self.finish_shuffle()
-        canvas = g.screen.getcanvas()._canvas
+        canvas = input_canvas(g.screen)
         root = canvas.winfo_toplevel()
         cup = g.cups[g.correct_id]
         canvas.event_generate(
@@ -259,12 +260,12 @@ class GameTests(unittest.TestCase):
         settings = []
         for level in range(1, 11):
             g.level = level
-            g.begin_chapter()
+            g.rounds.begin_chapter()
             self.assertEqual(g.state, "story")
             self.assertEqual(g.story_page, 0)
             self.assertEqual(g.cups, [])
             settings.append(g.scene_location)
-            g.choose(0)
+            g.rounds.choose(0)
             self.assertEqual(g.state, "story")
             self.click_button("story_next")
             self.assertEqual((g.state, g.story_page), ("story", 1))
@@ -275,7 +276,7 @@ class GameTests(unittest.TestCase):
             settings, ["hall"] * 3 + ["kitchen"] * 3 + ["terrace"] * 3 + ["dawn"]
         )
         g.mode = "Endless"
-        g.start_game()
+        g.rounds.start_game()
         self.assertEqual((g.state, g.scene_location), ("reveal", "afterparty"))
 
     def test_cabinet_draw_animation_equip_and_fair_cups(self):
@@ -285,7 +286,7 @@ class GameTests(unittest.TestCase):
         self.assertEqual(g.state, "cabinet")
         self.click_button("odds")
         self.assertEqual(g.state, "odds")
-        g.escape()
+        g.controls.escape()
         for skin, roll in zip(
             ("normal", "uncommon", "rare", "epic", "legendary", "mythic"),
             (0, 5000, 7700, 9200, 9800, 9980),
@@ -294,23 +295,23 @@ class GameTests(unittest.TestCase):
                 self.click_button("draw")
             self.assertEqual(g.state, "gacha_opening")
             tickets = g.profile["tickets"]
-            g.draw_cup()
+            g.cabinet.draw_cup()
             self.assertEqual(g.profile["tickets"], tickets)
             for _ in range(48):
                 if g.state == "gacha_opening":
-                    g.animate_draw()
+                    g.cabinet.animate_draw()
             self.assertEqual(g.state, "gacha_reveal")
             self.assertEqual(g.pending_cup, skin)
             self.click_button("equip:" + skin)
             self.assertEqual(g.profile["equipped"], skin)
             self.assertEqual(
-                collection.load_profile(collection.PROFILE_FILE)["equipped"], skin
+                collection.load_profile(g.profile_path)["equipped"], skin
             )
             self.start_gameplay()
             self.assertEqual({cup.sprite.shape() for cup in g.cups}, {skin + "_cup"})
-            g.show_cabinet()
+            g.cabinet.show_cabinet()
         g.profile["tickets"] = 0
-        g.show_cabinet()
+        g.cabinet.show_cabinet()
         self.click_button("draw")
         self.assertEqual(g.state, "cabinet")
         self.assertEqual(g.profile["tickets"], 0)
@@ -324,13 +325,13 @@ class GameTests(unittest.TestCase):
             for level in range(1, STORY_LEVELS + 1):
                 self.finish_shuffle()
                 expected += level * 100 + (g.lives - 1) * 20
-                g.choose(g.cups[g.correct_id].slot)
+                g.rounds.choose(g.cups[g.correct_id].slot)
                 score = g.score
-                g.choose(0)  # Repeated input must not award points twice.
+                g.rounds.choose(0)  # Repeated input must not award points twice.
                 self.assertEqual(g.score, score)
                 if level < STORY_LEVELS:
                     self.assertEqual(g.state, "result")
-                    g.advance()
+                    g.controls.advance()
             self.assertEqual(g.state, "victory")
             self.assertEqual(g.score, expected)
             self.assertGreaterEqual(g.best_score(), expected)
@@ -341,14 +342,14 @@ class GameTests(unittest.TestCase):
         for lives in (2, 1, 0):
             self.finish_shuffle()
             wrong = next(c.slot for c in g.cups if c.cid != g.correct_id)
-            g.choose(wrong)
+            g.rounds.choose(wrong)
             self.assertEqual(g.lives, lives)
             self.assertFalse(g.perfect)
             self.assertEqual(g.state, "retry" if lives else "over")
             if lives:
-                g.advance()
+                g.controls.advance()
                 self.assertEqual(g.level, 1)
-        g.advance()
+        g.controls.advance()
         self.assertEqual(g.lives, 3)
 
     def test_endless_combo(self):
@@ -357,73 +358,135 @@ class GameTests(unittest.TestCase):
         self.start_gameplay()
         for _ in range(15):
             self.finish_shuffle()
-            g.choose(g.cups[g.correct_id].slot)
-            g.advance()
+            g.rounds.choose(g.cups[g.correct_id].slot)
+            g.controls.advance()
         self.assertEqual(g.combo, 15)
         self.assertEqual(g.level, 16)
         self.finish_shuffle()
-        g.choose(next(c.slot for c in g.cups if c.cid != g.correct_id))
+        g.rounds.choose(next(c.slot for c in g.cups if c.cid != g.correct_id))
         self.assertEqual(g.combo, 0)
 
     def test_pause_interrupt_and_hitboxes(self):
         g = self.game
         self.start_gameplay()
-        g.choose(0)
+        g.rounds.choose(0)
         self.assertEqual(g.state, "reveal")
-        g.toggle_pause()
-        g.choose(0)
+        g.controls.toggle_pause()
+        g.rounds.choose(0)
         self.assertEqual(g.state, "paused")
-        g.toggle_pause()
-        g.begin_shuffle()
-        g.animate_swap()
-        g.toggle_pause()
-        g.toggle_pause()
+        g.controls.toggle_pause()
+        g.rounds.begin_shuffle()
+        g.rounds.animate_swap()
+        g.controls.toggle_pause()
+        g.controls.toggle_pause()
         self.finish_shuffle()
         cup = g.cups[g.correct_id]
-        g.on_click(cup.x, -140)  # Bare table outside the number button is not a hit.
+        g.controls.on_click(
+            cup.x, -140
+        )  # Bare table outside the number button is not a hit.
         self.assertEqual(g.state, "select")
-        g.choose(999)
+        g.rounds.choose(999)
         self.assertEqual(g.state, "select")
-        g.on_click(cup.x, 0)
+        g.controls.on_click(cup.x, 0)
         self.assertEqual(g.state, "result")
         self.start_gameplay()
-        g.begin_shuffle()
-        g.animate_swap()
-        g.show_how_to_play()
+        g.rounds.begin_shuffle()
+        g.rounds.animate_swap()
+        g.views.show_how_to_play()
         g.update()
         self.assertEqual(g.state, "how_to_play")
-        g.advance()
+        g.controls.advance()
         self.assertEqual(g.state, "menu")
 
     def test_menu_navigation_and_no_sprite_leak(self):
         g = self.game
-        g.cycle_mode()
+        g.controls.cycle_mode()
         self.assertEqual(g.mode, "Endless")
-        g.cycle_difficulty()
+        g.controls.cycle_difficulty()
         self.assertEqual(g.difficulty, "Hard")
         count = len(g.screen.turtles())
+        sprites = tuple(cup.sprite for cup in g.cup_pool)
         for _ in range(20):
             self.start_gameplay()
-            g.show_menu()
+            g.views.show_menu()
         self.assertEqual(len(g.screen.turtles()), count)
+        for level, expected in ((1, 3), (4, 4), (7, 5), (10, 6)):
+            g.level = level
+            g.rounds.start_level()
+            self.assertEqual(len(g.cups), expected)
+            self.assertEqual(tuple(cup.sprite for cup in g.cups), sprites[:expected])
+            g.views.show_menu()
+            self.assertTrue(all(not sprite.isvisible() for sprite in sprites))
+        self.assertEqual(len(g.screen.turtles()), count)
+
+    def test_failed_high_score_save_is_visible(self):
+        g = self.game
+        self.start_gameplay()
+        self.finish_shuffle()
+        g.scores = {}
+        with patch("round_logic.save_score", return_value=False):
+            g.rounds.choose(g.cups[g.correct_id].slot)
+        self.assertTrue(g.save_failed)
+        canvas = g.screen.getcanvas()
+        messages = [
+            canvas.itemcget(item, "text")
+            for item in canvas.find_all()
+            if canvas.type(item) == "text"
+        ]
+        self.assertIn("Save failed. Check folder permissions.", messages)
+
+    def test_cup_images_are_above_the_background(self):
+        g = self.game
+        canvas = g.screen.getcanvas()
+        for level, count in ((1, 3), (4, 4), (7, 5), (10, 6)):
+            g.level = level
+            g.rounds.start_level()
+            g.screen.update()
+            for phase in ("reveal", "shuffle", "select"):
+                if phase == "shuffle":
+                    g.rounds.begin_shuffle()
+                    g.rounds.animate_swap()
+                elif phase == "select":
+                    self.finish_shuffle()
+                g.screen.update()
+                stack = list(canvas.find_all())
+                image_name = str(g.assets["skins"][g.profile["equipped"]][2])
+                cup_items = [
+                    item
+                    for item in stack
+                    if canvas.type(item) == "image"
+                    and canvas.itemcget(item, "image") == image_name
+                ]
+                self.assertEqual(len(cup_items), count)
+                background_top = max(
+                    stack.index(i) for i in canvas.find_withtag("scene")
+                )
+                self.assertTrue(all(stack.index(i) > background_top for i in cup_items))
+
+    def test_live_tk_errors_are_not_silenced(self):
+        g = self.game
+        with patch.object(g.screen, "update", side_effect=app.tkinter.TclError("bug")):
+            with self.assertRaises(app.tkinter.TclError):
+                g.update()
+        self.assertTrue(g.running)
 
     def test_imperfect_ending_and_menu_clicks(self):
         g = self.game
         box = g.buttons["mode:Endless"]
-        g.on_click((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
+        g.controls.on_click((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
         self.assertEqual(g.mode, "Endless")
         g.mode = "Story"
         self.start_gameplay()
         g.perfect = False
         g.level = 10
-        g.start_level()
+        g.rounds.start_level()
         self.finish_shuffle()
-        g.choose(g.cups[g.correct_id].slot)
+        g.rounds.choose(g.cups[g.correct_id].slot)
         self.assertEqual(g.state, "victory")
         self.assertEqual(g.score, 1040)
-        g.on_click(0, 0)
+        g.controls.on_click(0, 0)
         self.assertEqual(g.state, "victory")
-        g.escape()
+        g.controls.escape()
         self.assertEqual(g.state, "menu")
 
     def test_elapsed_time_reveal_and_pause(self):
@@ -434,7 +497,7 @@ class GameTests(unittest.TestCase):
         with patch("what_the_cup.time.monotonic", return_value=100.05):
             g.update()
         self.assertEqual(g.state, "shuffle")
-        g.toggle_pause()
+        g.controls.toggle_pause()
         frames = g.swap_frame
         g.last_tick = 100.0
         with patch("what_the_cup.time.monotonic", return_value=101.0):
@@ -462,22 +525,22 @@ class GameTests(unittest.TestCase):
             g.mode = mode
             for difficulty in DIFFICULTIES:
                 g.difficulty = difficulty
-                g.show_menu()
+                g.views.show_menu()
                 verify_text()
-        g.show_how_to_play()
+        g.views.show_how_to_play()
         verify_text()
         g.mode = "Story"
         self.start_gameplay()
         initial = len(canvas.find_all())
         for _ in range(20):
-            g.draw_hud()
+            g.views.draw_hud()
         self.assertEqual(len(canvas.find_all()), initial)
         for level in (1, 4, 7, 10):
             g.level = level
-            g.start_level()
+            g.rounds.start_level()
             verify_text()
             self.finish_shuffle()
-            g.choose(g.cups[g.correct_id].slot)
+            g.rounds.choose(g.cups[g.correct_id].slot)
             verify_text()
 
     def test_every_game_entry_draws_gameplay_instead_of_menu(self):
@@ -488,17 +551,17 @@ class GameTests(unittest.TestCase):
                 for entry in ("click", "enter", "restart", "help"):
                     g.mode = mode
                     g.difficulty = difficulty
-                    g.show_menu()
+                    g.views.show_menu()
                     if entry == "click":
                         x1, y1, x2, y2 = g.buttons["start"]
-                        g.on_click((x1 + x2) / 2, (y1 + y2) / 2)
+                        g.controls.on_click((x1 + x2) / 2, (y1 + y2) / 2)
                     elif entry == "enter":
-                        g.advance()
+                        g.controls.advance()
                     elif entry == "restart":
-                        g.restart()
+                        g.controls.restart()
                     else:
-                        g.show_how_to_play()
-                        g.restart()
+                        g.views.show_how_to_play()
+                        g.controls.restart()
                     g.screen.update()
                     self.enter_round()
                     self.assertEqual(g.state, "reveal")
@@ -518,7 +581,7 @@ class GameTests(unittest.TestCase):
                         for item in canvas.find_all()
                         if canvas.type(item) == "image"
                     ]
-                    self.assertNotIn(str(g.screen._party_images[2]), images)
+                    self.assertNotIn(str(g.assets["party"][2]), images)
 
 
 if __name__ == "__main__":

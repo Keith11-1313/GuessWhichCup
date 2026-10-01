@@ -14,14 +14,10 @@ RESULT_BUTTON_BOUNDS = (239, -287, 441, -245)
 
 COLORS = {
     "background": "#191522",
-    "panel": "#30213b",
-    "panel_light": "#46334f",
     "white": "#fff0d9",
     "muted": "#cbb8c9",
     "gold": "#f2bf68",
-    "gold_dark": "#f2bf68",
     "danger": "#ff8294",
-    "success": "#67e8b0",
 }
 
 DIFFICULTIES = {
