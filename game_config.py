@@ -3,7 +3,6 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-CUP_GIF = ROOT / 'cup.gif'
 SAVE_FILE = ROOT / 'what_the_cup_scores.json'
 
 WIDTH, HEIGHT = 1000, 700
@@ -11,13 +10,13 @@ FRAME_MS = 17
 STORY_LEVELS = 10
 
 COLORS = {
-    'background': '#10182b',
-    'panel': '#192640',
-    'panel_light': '#223454',
-    'white': '#f4f7ff',
-    'muted': '#aebbd6',
-    'gold': '#ffd35a',
-    'gold_dark': '#d7a62d',
+    'background': '#191522',
+    'panel': '#30213b',
+    'panel_light': '#46334f',
+    'white': '#fff0d9',
+    'muted': '#cbb8c9',
+    'gold': '#f2bf68',
+    'gold_dark': '#f2bf68',
     'danger': '#ff8294',
     'success': '#67e8b0',
 }
