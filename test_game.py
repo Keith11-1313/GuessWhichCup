@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 import what_the_cup as app
 import cup_collection as collection
+import party_art
 from game_config import DIFFICULTIES, STORY_LEVELS, level_settings
 from score_store import load_scores, save_score
 
@@ -463,6 +464,20 @@ class GameTests(unittest.TestCase):
                 )
                 self.assertTrue(all(stack.index(i) > background_top for i in cup_items))
 
+    def test_png_assets_and_missing_file_message(self):
+        g = self.game
+        for images in g.assets["skins"].values():
+            self.assertEqual((images[0].width(), images[0].height()), (32, 34))
+        for name, image in g.assets["backgrounds"].items():
+            size = (435, 410) if name == "menu" else (940, 410)
+            self.assertEqual((image.width(), image.height()), size)
+        for image in g.assets["portraits"].values():
+            self.assertEqual((image.width(), image.height()), (96, 150))
+        with tempfile.TemporaryDirectory() as folder:
+            with patch.object(party_art, "ASSET_FOLDER", Path(folder)):
+                with self.assertRaisesRegex(FileNotFoundError, "normal.png"):
+                    party_art.load_assets(g.screen)
+
     def test_live_tk_errors_are_not_silenced(self):
         g = self.game
         with patch.object(g.screen, "update", side_effect=app.tkinter.TclError("bug")):
@@ -581,7 +596,10 @@ class GameTests(unittest.TestCase):
                         for item in canvas.find_all()
                         if canvas.type(item) == "image"
                     ]
-                    self.assertNotIn(str(g.assets["party"][2]), images)
+                    backgrounds = g.assets["backgrounds"]
+                    expected = "hall" if mode == "Story" else "afterparty"
+                    self.assertIn(str(backgrounds[expected]), images)
+                    self.assertNotIn(str(backgrounds["menu"]), images)
 
 
 if __name__ == "__main__":

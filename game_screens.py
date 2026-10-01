@@ -1,7 +1,7 @@
 """Menu, story, HUD and drawing helpers for the shared Game session."""
 
 from game_config import COLORS, DIFFICULTIES, RESULT_BUTTON_BOUNDS, STORY_LEVELS
-from party_art import scenery, frame, pixel_title, guest
+from party_art import scenery, frame, draw_title, portrait
 from party_story import CHAPTERS, SCENES, LOCATION_NAMES, location
 
 WHITE = COLORS["white"]
@@ -42,7 +42,7 @@ class GameScreens:
             canvas.delete(layer)
         self.session.art_layer = "scene"
         scenery(self, menu=view == "menu")
-        pixel_title(self, "GUESS WHICH CUP", -466, 306, 4)
+        draw_title(self, -466, 306)
         self.write(self.session.static, 467, 288, "Lantern House", 16, GOLD, "right")
         self.write(
             self.session.static, 467, 266, "A night to remember", 10, MUTED, "right"
@@ -317,13 +317,7 @@ class GameScreens:
             24,
             WHITE,
         )
-        colors = {
-            "Mira": ("#829d8c", "#36263b"),
-            "Theo": ("#b47b90", "#b38361"),
-            "Jun": ("#8c9bbc", "#272735"),
-        }
-        shirt, hair = colors[speaker]
-        guest(self, -53, -97, shirt, hair, 6)
+        portrait(self, speaker, -53, -97)
         self.write(self.session.message, -442, -220, speaker, 16, GOLD, "left")
         self.write(
             self.session.message,

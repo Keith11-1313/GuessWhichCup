@@ -13,7 +13,7 @@ from game_config import COLORS, FRAME_MS, HEIGHT, SAVE_FILE, WIDTH
 from game_objects import Cup, make_writer, tone
 from game_screens import GameScreens
 from input_controls import InputControls
-from party_art import register_cup
+from party_art import load_assets
 from round_logic import RoundLogic
 from score_store import load_scores
 
@@ -31,7 +31,7 @@ class Game:
         self.screen.title("Guess Which Cup | Lantern House | by @RENE")
         self.screen.bgcolor(BG)
         self.screen.tracer(0)
-        self.assets = register_cup(self.screen)
+        self.assets = load_assets(self.screen)
         self.running = True
         self.sound_enabled = True
         self.paused_state = None
