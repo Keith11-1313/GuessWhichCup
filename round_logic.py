@@ -67,6 +67,10 @@ class RoundLogic:
             Cup(i, self.slots[i], self.profile["equipped"]) for i in range(count)
         ]
 
+        for cup in self.cups:
+            cup.y = -35
+            cup.render()
+
         for i, x in enumerate(self.slots):
             self.rectangle(x - 15, -124, x + 15, -96, "#312331")
             self.write(self.labels, x, -119, str(i + 1), 12, GOLD)
@@ -97,7 +101,7 @@ class RoundLogic:
         self.ball.hideturtle()
 
         for cup in self.cups:
-            cup.y = 0
+            cup.y = -35
             cup.render()
 
         self.set_message("Follow the cup", "")
@@ -124,8 +128,8 @@ class RoundLogic:
         b.x = self.slots[slot_b] + (self.slots[slot_a] - self.slots[slot_b]) * eased
 
         arc = math.sin(math.pi * t) * 37
-        a.y = arc
-        b.y = -arc
+        a.y = -35 + arc
+        b.y = -35 - arc
 
         a.render()
         b.render()
@@ -133,7 +137,7 @@ class RoundLogic:
         if t >= 1:
             a.slot, b.slot = slot_b, slot_a
             a.x, b.x = self.slots[a.slot], self.slots[b.slot]
-            a.y = b.y = 0
+            a.y = b.y = -35
 
             a.render()
             b.render()

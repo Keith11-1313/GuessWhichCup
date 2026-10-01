@@ -31,10 +31,67 @@ class GameScreens:
             tags=(getattr(self, "art_layer", "scene"),),
         )
 
+    def draw_heart(self, x, y, size=4, color=None, shake=0):
+        color = color or COLORS["danger"]
+
+        pattern = [
+            "01100110",
+            "11111111",
+            "11111111",
+            "01111110",
+            "00111100",
+            "00011000",
+        ]
+
+        for row, line in enumerate(pattern):
+            for col, pixel in enumerate(line):
+                if pixel == "1":
+                    self.rectangle(
+                        x + col * size + shake,
+                        y - row * size,
+                        x + (col + 1) * size + shake,
+                        y - (row + 1) * size,
+                        color,
+                    )
+
+    def animate_last_heart(self):
+        active_states = (
+            "reveal",
+            "shuffle",
+            "select",
+            "paused",
+            "retry",
+            "result",
+        )
+
+        if self.lives != 1 or self.state not in active_states:
+            self.heart_shake_active = False
+            self.screen.getcanvas().delete("heart_fx")
+            return
+
+        if self.heart_shake_offset == 0:
+            self.heart_shake_offset = 4
+        else:
+            self.heart_shake_offset *= -1
+
+        self.screen.getcanvas().delete("heart_fx")
+        self.art_layer = "heart_fx"
+
+        self.draw_heart(
+            -445,
+            202,
+            size=4,
+            shake=self.heart_shake_offset,
+        )
+
+        self.art_layer = "scene"
+
+        self.screen.ontimer(self.animate_last_heart, 100)
+
     def draw_background(self, view="game"):
         self.static.clear()
         canvas = self.screen.getcanvas()
-        for layer in ("scene", "hud_art", "choice_art", "message_art", "draw_fx"):
+        for layer in ("scene", "hud_art", "heart_fx", "choice_art", "message_art", "draw_fx"):
             canvas.delete(layer)
         self.art_layer = "scene"
         scenery(self, menu=view == "menu")
@@ -69,16 +126,18 @@ class GameScreens:
         self.message.clear()
         self.buttons = {}
         frame(self, -365, -156, 365, 224, "#241d30")
-        self.write(self.menu_text, -330, 177, "A little party trick", 24, GOLD, "left")
+        self.write(self.menu_text, -140, 177, "A little party trick", 24, GOLD, "left")
         self.write(
             self.menu_text,
-            -330,
+            -145,
             140,
             "Three moments. One spark to keep safe.",
             12,
             MUTED,
             "left",
         )
+        self.rectangle(-330, 115, 330, 116, "#533f53")
+
         for y, title, detail in (
             (80, "Remember", "Look for the spark underneath the lifted cup."),
             (8, "Follow", "Track that cup as the table shuffles."),
@@ -112,11 +171,11 @@ class GameScreens:
         self.message.clear()
         self.buttons = {}
         frame(self, -8, -175, 470, 236, "#241d30")
-        self.write(self.menu_text, 24, 198, "Your invitation", 22, GOLD, "left")
+        self.write(self.menu_text, 130, 175, "Your invitation", 22, GOLD, "left")
         self.write(
             self.menu_text,
-            24,
-            167,
+            110,
+            145,
             "A hidden spark. A table full of friends.",
             12,
             WHITE,
@@ -166,11 +225,22 @@ class GameScreens:
 
     def draw_hud(self):
         self.hud_text.clear()
+
+        if not hasattr(self, "heart_shake_active"):
+            self.heart_shake_active = False
+
+        if not hasattr(self, "heart_shake_offset"):
+            self.heart_shake_offset = 0
+
         self.screen.getcanvas().delete("hud_art")
+        self.screen.getcanvas().delete("heart_fx")
+
         self.art_layer = "hud_art"
+
         frame(self, -470, 174, 470, 236, "#211b2c")
         self.rectangle(-166, 186, -165, 223, "#533f53")
         self.rectangle(142, 186, 143, 223, "#533f53")
+
         self.write(
             self.hud_text,
             -445,
@@ -180,15 +250,33 @@ class GameScreens:
             WHITE,
             "left",
         )
-        self.write(
-            self.hud_text,
-            -445,
-            185,
-            f"Lives  {self.lives}",
-            11,
-            COLORS["danger"],
-            "left",
-        )
+
+        if self.lives == 1:
+            self.heart_shake_active = True
+            self.heart_shake_offset = 4
+            self.art_layer = "heart_fx"
+
+            self.draw_heart(
+                -445,
+                202,
+                size=4,
+                shake=self.heart_shake_offset,
+            )
+
+            self.art_layer = "scene"
+            self.screen.ontimer(self.animate_last_heart, 100)
+
+        else:
+            self.heart_shake_active = False
+
+            for i in range(self.lives):
+                self.draw_heart(
+                    -445 + i * 50,
+                    202,
+                    size=4,
+                    shake=0,
+                )
+
         title = (
             f"Chapter {self.level} of {STORY_LEVELS}"
             if self.mode == "Story"

@@ -351,10 +351,10 @@ def scenery(game, menu=False):
         r(-445, -92, -55, -85, "#d5a071")
         r(-429, -152, -417, -108, "#654238")
         r(-83, -152, -71, -108, "#654238")
-        r(-368, -83, -199, -77, "#62433d")
+        r(-325, -83, -155, -77, "#62433d")
         p = game.static
         p.shape("hero_cup")
-        p.goto(-281, 5)
+        p.goto(-240, 5)
         p.stamp()
         game.write(p, -252, -147, "Mira & Theo are saving you a seat.", 10, "#dfc3a8")
     else:
