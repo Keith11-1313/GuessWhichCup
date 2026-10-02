@@ -1,7 +1,7 @@
 """Menu, story, HUD and drawing helpers for the shared Game session."""
 
 from game_config import COLORS, DIFFICULTIES, RESULT_BUTTON_BOUNDS, STORY_LEVELS
-from party_art import scenery, frame, draw_title, portrait
+from party_art import scenery, frame, draw_title, portrait, place_image
 from party_story import CHAPTERS, SCENES, LOCATION_NAMES, location
 
 WHITE = COLORS["white"]
@@ -199,15 +199,10 @@ class GameScreens:
             WHITE,
             "left",
         )
-        self.write(
-            self.session.hud_text,
-            -445,
-            185,
-            f"Lives  {self.session.lives}",
-            11,
-            COLORS["danger"],
-            "left",
-        )
+        total_lives = DIFFICULTIES[self.session.difficulty]["lives"]
+        for index in range(total_lives):
+            name = "heart_full" if index < self.session.lives else "heart_empty"
+            place_image(self, self.session.assets[name], -445 + index * 29, 201)
         title = (
             f"Chapter {self.session.level} of {STORY_LEVELS}"
             if self.session.mode == "Story"

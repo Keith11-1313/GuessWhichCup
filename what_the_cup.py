@@ -121,7 +121,7 @@ class Game:
 
     def play_tone(self, kind):
         if self.sound_enabled:
-            tone(kind, self.screen)
+            tone(kind)
 
     def close(self):
         self.running = False

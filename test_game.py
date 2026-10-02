@@ -3,6 +3,7 @@
 from game_objects import input_canvas
 from pathlib import Path
 import random
+import sys
 from collections import Counter
 import copy
 import tempfile
@@ -12,6 +13,7 @@ from unittest.mock import patch
 import what_the_cup as app
 import cup_collection as collection
 import party_art
+import game_objects
 from game_config import DIFFICULTIES, STORY_LEVELS, level_settings
 from score_store import load_scores, save_score
 
@@ -477,6 +479,40 @@ class GameTests(unittest.TestCase):
             with patch.object(party_art, "ASSET_FOLDER", Path(folder)):
                 with self.assertRaisesRegex(FileNotFoundError, "normal.png"):
                     party_art.load_assets(g.screen)
+
+    def test_heart_hud_matches_remaining_lives(self):
+        g = self.game
+        canvas = g.screen.getcanvas()
+        for difficulty, settings in DIFFICULTIES.items():
+            g.difficulty = difficulty
+            for lives in range(settings["lives"] + 1):
+                g.lives = lives
+                g.views.draw_hud()
+                images = [
+                    canvas.itemcget(item, "image")
+                    for item in canvas.find_withtag("hud_art")
+                    if canvas.type(item) == "image"
+                ]
+                self.assertEqual(images.count(str(g.assets["heart_full"])), lives)
+                self.assertEqual(
+                    images.count(str(g.assets["heart_empty"])),
+                    settings["lives"] - lives,
+                )
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows WAV playback backend")
+    def test_custom_sound_playback_never_uses_system_alerts(self):
+        import winsound
+
+        with patch.object(winsound, "PlaySound") as playback:
+            with patch.object(winsound, "MessageBeep") as system_alert:
+                for kind in ("reveal", "correct", "wrong", "win"):
+                    game_objects.tone(kind)
+                    path, flags = playback.call_args.args
+                    self.assertTrue(Path(path).is_file())
+                    self.assertTrue(flags & winsound.SND_ASYNC)
+                    self.assertTrue(flags & winsound.SND_NODEFAULT)
+                self.assertEqual(playback.call_count, 4)
+                system_alert.assert_not_called()
 
     def test_live_tk_errors_are_not_silenced(self):
         g = self.game

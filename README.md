@@ -98,7 +98,9 @@ awarding a round twice.
 
 The game uses built-in Turtle/Tkinter, original PNG pixel artwork,
 nearest-pixel cup scaling and Segoe UI body text (system fallback elsewhere).
-Sounds use Windows notifications or a system bell. The desktop window is
+Sounds are original soft WAV chimes in `assets/sounds`, played asynchronously
+on Windows. Other platforms stay silent; no system notification or bell is
+used as a fallback. Press S to toggle sound. The desktop window is
 1000 x 700. This release was verified on Windows.
 
 ## Verify
@@ -159,6 +161,13 @@ Pillow installation is needed to play the game.
 | `assets/backgrounds` | Hall, kitchen, terrace, dawn and afterparty | 940 x 410 |
 | `assets/backgrounds` | `menu.png` | 435 x 410 |
 | `assets/ui` | `title.png`; `spark.png` | 360 x 28; 18 x 18, transparent |
+| `assets/ui` | `heart_full.png`, `heart_empty.png` | 24 x 18, transparent |
+
+Lives use one filled heart per remaining life and empty hearts for lives lost.
+Easy shows five heart slots, Normal three, and Hard one. To change audio,
+replace `reveal.wav`, `correct.wav`, `wrong.wav`, or `win.wav` in
+`assets/sounds` with short PCM WAV files. Keep the filenames; the game uses
+only Python's built-in Windows sound module and does not need audio packages.
 
 Backgrounds include scenery, the table and small party guests. Story portraits
 are separate character images. Cups are scaled automatically for the cabinet,

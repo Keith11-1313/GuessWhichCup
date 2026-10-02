@@ -43,6 +43,8 @@ def load_assets(screen):
         "backgrounds": backgrounds,
         "portraits": portraits,
         "title": load("ui/title.png"),
+        "heart_full": load("ui/heart_full.png"),
+        "heart_empty": load("ui/heart_empty.png"),
     }
 
 

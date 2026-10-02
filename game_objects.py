@@ -1,6 +1,7 @@
-"""Turtle cup sprites, text pens and optional system sound feedback."""
+"""Turtle cup sprites, text pens and custom WAV sound feedback."""
 
 import sys
+from pathlib import Path
 import tkinter
 import turtle
 from game_config import COLORS
@@ -27,24 +28,21 @@ def make_writer(color=WHITE):
     return t
 
 
-def tone(kind, screen):
+def tone(kind):
+    """Play quiet custom WAV feedback without triggering system notifications."""
     if sys.platform == "win32":
         try:
             import winsound
 
-            winsound.MessageBeep(
-                winsound.MB_OK
-                if kind in ("correct", "win")
-                else winsound.MB_ICONEXCLAMATION
+            path = Path(__file__).resolve().parent / "assets" / "sounds" / f"{kind}.wav"
+            winsound.PlaySound(
+                str(path),
+                winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT,
             )
             return
         except (ImportError, RuntimeError, OSError):
             pass
 
-    try:
-        screen.getcanvas().bell()
-    except Exception:
-        pass
 
 
 class Cup:
