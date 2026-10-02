@@ -94,6 +94,8 @@ class Game:
         self.swap_pair = None
         self.swap_frame = 0
         self.buttons = {}
+        self.footer_actions = {}
+        self.hint_frames = 0
 
         self.views = GameScreens(self)
         self.rounds = RoundLogic(self, self.views)
@@ -106,6 +108,8 @@ class Game:
             self.screen.mainloop()
 
     def clear_cups(self):
+        self.hint_frames = 0
+        self.screen.getcanvas().delete("spark_hint")
         for cup in self.cups:
             cup.hide()
 
@@ -146,6 +150,10 @@ class Game:
                     self.rounds.animate_swap()
                 elif self.state == "gacha_opening":
                     self.cabinet.animate_draw()
+                elif self.state == "select" and self.hint_frames:
+                    self.hint_frames -= 1
+                    if self.hint_frames == 0:
+                        self.screen.getcanvas().delete("spark_hint")
             self.screen.update()
             if self.running:
                 self.screen.ontimer(self.update, FRAME_MS)

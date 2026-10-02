@@ -1,6 +1,7 @@
 """Menu, story, HUD and drawing helpers for the shared Game session."""
 
 from game_config import COLORS, DIFFICULTIES, RESULT_BUTTON_BOUNDS, STORY_LEVELS
+from tkinter import font
 from party_art import scenery, frame, draw_title, portrait, place_image
 from party_story import CHAPTERS, SCENES, LOCATION_NAMES, location
 
@@ -255,26 +256,57 @@ class GameScreens:
 
     def draw_footer(self):
         self.session.footer.clear()
-        if self.session.state == "menu":
-            left, right = "Enter  Play    H  Help", "Esc  Quit"
-        elif self.session.state == "story":
-            left, right = (
-                "Enter  Continue" if self.session.story_page == 0 else "Enter  Play"
-            ), "M  Menu"
-        elif self.session.state == "cabinet":
-            left, right = "Enter  Draw", "Esc  Back"
-        elif self.session.state == "gacha_opening":
-            left, right = "Enter  Reveal", "Esc  Back"
-        elif self.session.state in ("reveal", "shuffle", "select", "paused"):
-            left, right = (
-                "P  Resume" if self.session.state == "paused" else "P  Pause    S Sound"
-            ), "M  Menu"
-        elif self.session.state in ("result", "retry", "over", "victory"):
-            left, right = "Enter  Continue", "M  Menu"
+        self.session.screen.getcanvas().delete("footer_art")
+        self.session.footer_actions = {}
+        state = self.session.state
+        if state == "menu":
+            left = [("advance", "Enter  Play"), ("help", "H  Help")]
+            right = ("escape", "Esc  Quit")
+        elif state in ("reveal", "shuffle", "select", "paused"):
+            pause = "P  Resume" if state == "paused" else "P  Pause"
+            sound = "S  Sound on" if self.session.sound_enabled else "S  Sound off"
+            left = [("pause", pause), ("sound", sound)]
+            right = ("menu", "M  Menu")
+        elif state == "story":
+            label = "Enter  Continue" if self.session.story_page == 0 else "Enter  Play"
+            left, right = [("advance", label)], ("menu", "M  Menu")
+        elif state in ("result", "retry", "over", "victory"):
+            left, right = [("advance", "Enter  Continue")], ("menu", "M  Menu")
+        elif state in ("cabinet", "gacha_opening", "gacha_reveal"):
+            label = "Enter  Draw" if state == "cabinet" else "Enter  Reveal"
+            if state == "gacha_reveal":
+                label = "Enter  Cabinet"
+            left, right = [("advance", label)], ("escape", "Esc  Back")
         else:
-            left, right = "", "Esc  Back"
-        self.write(self.session.footer, -464, -327, left, 10, MUTED, "left")
-        self.write(self.session.footer, 464, -327, right, 10, MUTED, "right")
+            left, right = [], ("escape", "Esc  Back")
+        text_font = font.Font(family="Segoe UI", size=10)
+        old_layer = self.session.art_layer
+        self.session.art_layer = "footer_art"
+        x = -464
+        for action, label in left:
+            width = text_font.measure(label)
+            self.footer_link(action, label, x, width)
+            x += width + 22
+        action, label = right
+        width = text_font.measure(label)
+        self.footer_link(action, label, 464 - width, width)
+        self.session.art_layer = old_layer
+
+    def footer_link(self, action, label, x, width):
+        self.write(self.session.footer, x, -327, label, 10, MUTED, "left")
+        self.rectangle(x, -332, x + width, -331, "#715166")
+        self.session.footer_actions[action] = (x - 4, -335, x + width + 4, -304)
+
+    def show_spark_hint(self):
+        """Briefly show a small muted glint beneath the tracked cup."""
+        cup = self.session.cups[self.session.correct_id]
+        canvas = self.session.screen.getcanvas()
+        canvas.delete("spark_hint")
+        canvas.create_image(
+            cup.x - 4, 58, anchor="nw",
+            image=self.session.assets["spark_hint"], tags=("spark_hint",),
+        )
+        self.session.hint_frames = 53
 
     def show_story(self):
         self.session.state = "story"

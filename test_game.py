@@ -499,6 +499,70 @@ class GameTests(unittest.TestCase):
                     settings["lives"] - lives,
                 )
 
+    def test_footer_links_are_clickable_in_each_phase(self):
+        g = self.game
+
+        def click(action):
+            x1, y1, x2, y2 = g.footer_actions[action]
+            g.controls.on_click((x1 + x2) / 2, (y1 + y2) / 2)
+
+        click("help")
+        self.assertEqual(g.state, "how_to_play")
+        click("escape")
+        self.assertEqual(g.state, "menu")
+        with patch.object(g, "close") as close:
+            click("escape")
+            close.assert_called_once()
+        click("advance")
+        self.assertEqual(g.state, "story")
+        click("advance")
+        self.assertEqual(g.story_page, 1)
+        click("advance")
+        self.assertEqual(g.state, "reveal")
+        click("pause")
+        self.assertEqual(g.state, "paused")
+        previous = g.sound_enabled
+        click("sound")
+        self.assertNotEqual(g.sound_enabled, previous)
+        click("pause")
+        self.assertEqual(g.state, "reveal")
+        self.finish_shuffle()
+        click("menu")
+        self.assertEqual(g.state, "menu")
+        g.controls.open_cabinet_from_menu()
+        click("escape")
+        self.assertEqual(g.state, "menu")
+
+    def test_endless_hint_is_gated_tracks_cup_and_expires(self):
+        g = self.game
+        canvas = g.screen.getcanvas()
+        for mode, level, visible in (("Story", 10, False), ("Endless", 10, False),
+                                     ("Endless", 11, True), ("Endless", 25, True)):
+            g.mode, g.level = mode, level
+            g.rounds.start_level()
+            self.finish_shuffle()
+            items = canvas.find_withtag("spark_hint")
+            self.assertEqual(bool(items), visible)
+            if visible:
+                cup = g.cups[g.correct_id]
+                self.assertEqual(canvas.coords(items[0]), [cup.x - 4, 58])
+                g.controls.toggle_pause()
+                remaining = g.hint_frames
+                g.update()
+                self.assertEqual(g.hint_frames, remaining)
+                g.controls.toggle_pause()
+                g.hint_frames = 1
+                g.last_tick = 100
+                g.frame_credit = 0
+                with patch("what_the_cup.time.monotonic", return_value=100.05):
+                    g.update()
+                self.assertFalse(canvas.find_withtag("spark_hint"))
+                g.views.show_spark_hint()
+                g.rounds.choose(cup.slot)
+                self.assertFalse(canvas.find_withtag("spark_hint"))
+        g.views.show_menu()
+        self.assertFalse(canvas.find_withtag("spark_hint"))
+
     @unittest.skipUnless(sys.platform == "win32", "Windows WAV playback backend")
     def test_custom_sound_playback_never_uses_system_alerts(self):
         import winsound

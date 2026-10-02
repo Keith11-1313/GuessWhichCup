@@ -45,6 +45,7 @@ def load_assets(screen):
         "title": load("ui/title.png"),
         "heart_full": load("ui/heart_full.png"),
         "heart_empty": load("ui/heart_empty.png"),
+        "spark_hint": load("ui/spark_hint.png"),
     }
 
 

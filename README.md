@@ -16,6 +16,10 @@ afterparty and continues until your lives run out.
 Easy gives five lives, Normal three, and Hard one. Cup counts grow from
 three to four at chapter 4, five at chapter 7, and six at chapter 10.
 The instruction always shows the current cup count.
+In Endless rounds 11 onward, a tiny amber glint briefly appears beneath the
+correct cup after shuffling. It lasts about 0.9 seconds and clears on selection
+or when leaving the round. Story and Endless rounds 1–10 keep normal tracking.
+The underlined footer controls are clickable as well as keyboard shortcuts.
 
 | Control | Action |
 | --- | --- |
@@ -162,6 +166,7 @@ Pillow installation is needed to play the game.
 | `assets/backgrounds` | `menu.png` | 435 x 410 |
 | `assets/ui` | `title.png`; `spark.png` | 360 x 28; 18 x 18, transparent |
 | `assets/ui` | `heart_full.png`, `heart_empty.png` | 24 x 18, transparent |
+| `assets/ui` | `spark_hint.png` | 9 x 7, transparent |
 
 Lives use one filled heart per remaining life and empty hearts for lives lost.
 Easy shows five heart slots, Normal three, and Hard one. To change audio,

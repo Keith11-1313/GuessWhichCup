@@ -105,6 +105,8 @@ class RoundLogic:
             if self.session.completed_swaps >= self.session.swaps:
                 self.session.state = "select"
                 self.views.set_message("Where is the spark?", self.selection_hint())
+                if self.session.mode == "Endless" and self.session.level > 10:
+                    self.views.show_spark_hint()
                 return
 
             a, b = random.sample(self.session.cups, 2)
@@ -155,6 +157,8 @@ class RoundLogic:
 
         # Lock input before rendering so a second click cannot score twice.
         self.session.state = "resolving"
+        self.session.hint_frames = 0
+        self.session.screen.getcanvas().delete("spark_hint")
         correct = self.session.cups[self.session.correct_id]
         selected.y = 76
         selected.render()

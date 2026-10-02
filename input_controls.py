@@ -28,6 +28,18 @@ class InputControls:
 
     def on_click(self, x, y):
         """Route a click according to the current screen or round phase."""
+        for action, bounds in self.session.footer_actions.items():
+            if point_in_rectangle(x, y, bounds):
+                handlers = {
+                    "advance": self.advance,
+                    "help": self.views.show_how_to_play,
+                    "escape": self.escape,
+                    "menu": self.views.show_menu,
+                    "pause": self.toggle_pause,
+                    "sound": self.toggle_sound,
+                }
+                handlers[action]()
+                return
         if self.session.state == "select":
             for cup in self.session.cups:
                 if cup.contains(x, y):
@@ -108,6 +120,7 @@ class InputControls:
             "Guess Which Cup | Lantern House | Sound "
             + ("on" if self.session.sound_enabled else "off")
         )
+        self.views.draw_footer()
 
     def cycle_mode(self):
         if self.session.state == "menu":
