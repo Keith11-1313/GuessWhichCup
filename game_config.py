@@ -1,9 +1,13 @@
 """Small, easy-to-explain configuration module for What The Cup."""
 
 from pathlib import Path
+import sys
 
 ROOT = Path(__file__).resolve().parent
-SAVE_FILE = ROOT / "what_the_cup_scores.json"
+# A bundled executable extracts artwork to a temporary folder. Keep saves
+# beside the actual executable so progress survives closing the game.
+SAVE_FOLDER = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else ROOT
+SAVE_FILE = SAVE_FOLDER / "what_the_cup_scores.json"
 
 WIDTH, HEIGHT = 1000, 700
 FRAME_MS = 17

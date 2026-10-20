@@ -28,7 +28,7 @@ class Game:
     def __init__(self, run_loop=True, score_path=None, profile_path=None):
         self.screen = turtle.Screen()
         self.screen.setup(WIDTH, HEIGHT)
-        self.screen.title("Guess Which Cup | Lantern House | by @RENE")
+        self.screen.title("Guess Which Cup | Lantern House")
         self.screen.bgcolor(BG)
         self.screen.tracer(0)
         self.assets = load_assets(self.screen)

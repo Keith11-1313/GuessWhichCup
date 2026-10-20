@@ -8,6 +8,19 @@ from the welcome hall to the kitchen, midnight terrace, and sunrise.
 Double-click Play.bat on Windows, or run `python what_the_cup.py`.
 Python 3 with Tkinter is required. No pip packages or internet are needed.
 
+### Windows executable
+
+Open `dist/GuessWhichCup.exe` to play without installing Python. You can share
+that single executable; artwork and sounds are included. Keep it in a writable
+folder, such as Desktop or Documents. The executable stores `lantern_profile.json`
+and `what_the_cup_scores.json` beside itself. To carry over existing progress,
+copy those two save files beside the executable before starting it.
+
+To rebuild after editing the source, install the optional packaging tool once:
+`python -m pip install --target .build-tools pyinstaller==6.22.0`
+Then run `Build.bat`. Build output is ignored by Git; player saves are never
+included in the executable.
+
 Story has ten chapters, with two short dialogue beats before each round.
 Press Continue, then Play. Watch the spark, track its cup, and choose when
 movement stops. Results wait for you. Endless starts directly in the neon

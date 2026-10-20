@@ -6,8 +6,9 @@ import os
 from pathlib import Path
 import random
 import tempfile
+from game_config import SAVE_FOLDER
 
-PROFILE_FILE = Path(__file__).resolve().parent / "lantern_profile.json"
+PROFILE_FILE = SAVE_FOLDER / "lantern_profile.json"
 DRAW_COST = 3
 # Weights total 10,000. Each rarity currently contains one original cup.
 CUPS = (
