@@ -121,9 +121,19 @@ Writes use atomic replacement; a failed draw save spends no tickets.
 M, P or Escape during a run opens a pause overlay. Resume returns to the exact
 frozen board. Save & Menu saves a checkpoint and returns to the main menu;
 Save & Exit saves first, then closes the game. Failed saves leave the table
-paused with an error. Resume run on the main menu restores `lantern_run.json`,
+paused with an error. The Welcome back screen shows the saved mode, difficulty, chapter
+or round, score and remaining hearts. It offers Resume and New game; new-game
+settings are kept on a separate screen. Resume Story or Resume Endless restores `lantern_run.json`,
 including a shuffle in progress, score, hearts, combo and chapter/round.
-New game starts from chapter/round 1 and clears the old checkpoint.
+Start a different game opens a dedicated setup screen. Mode cards explain
+Story (10 chapters) and Endless (no round limit). Difficulty cards show their
+starting hearts; a checkmark and border identify the current selections.
+The shuffle pace is described below the cards. Card titles, captions, buttons
+and saved-score values are measured against their available width before
+drawing; clipping checks cover both modes and every difficulty. Gold action buttons start or
+resume play. The saved-game summary includes the chapter location. Back or Escape returns to the
+saved-run screen. Changing settings does not change the checkpoint. Start Story or Start Endless begins at chapter or
+round 1 and replaces it; Enter resumes the saved run when one exists.
 Cup ownership, tickets and high scores remain in their existing save files.
 Endless ticket rewards use a run/round identifier so reloading a checkpoint
 does not award the same ticket again.
@@ -179,7 +189,7 @@ awarding a round twice.
 The game uses built-in Turtle/Tkinter, original PNG pixel artwork,
 nearest-pixel cup scaling and bundled Pixelify Sans lettering. Numbers use
 bold Consolas for readability.
-Sounds are original soft WAV chimes in `assets/sounds`, played asynchronously
+Short sound effects are original soft WAV chimes in `assets/sounds`, played asynchronously
 on Windows. Other platforms stay silent; no system notification or bell is
 used as a fallback. Press S to toggle sound. The desktop window is
 1000 x 700. Runtime checks target Windows; an executable must be checked separately
@@ -203,7 +213,7 @@ shuffle in every chapter. Inspect those images as well as the final overview.
 The tests also check that rendered cup images sit above the scenery, since a
 correct visibility flag alone cannot detect a cup covered by the background.
 
-The latest regression run passed all 43 tests after the darker reveal
+The previous regression run passed all 43 tests after the darker reveal
 background and ticket artwork update. Earlier full player-flow QA covered all
 ten Story chapters. That earlier run does not replace checking the latest
 cabinet interaction manually.
@@ -277,11 +287,17 @@ does not need to install the font. Dialogue wraps before the action buttons.
 Numbers use bold Consolas for clear digit shapes while surrounding words keep
 the pixel font. Cup number labels are larger than the small counter text.
 
-`assets/sounds/lantern_party.wav` is an original 48-second, 16-bit PCM lounge loop
-with warm sustained chords, low bass and sparse soft bells. It starts at 20%
+`assets/sounds/lantern_party.wav` uses **Cozy Puzzle Stage Select** by MintoDog,
+a loopable 100 BPM synth-and-sax puzzle track released under CC0. Source and license details
+are in `assets/sounds/MUSIC-CREDITS.txt`. It is converted to 22,050 Hz stereo,
+16-bit PCM WAV and normalized to -22 LUFS. It starts at 20%
 music-channel volume. Use [ and ] to adjust by 5%; change
 `DEFAULT_MUSIC_VOLUME` in `game_audio.py` to tune the starting level.
-The reveal, correct, wrong, win, click and unlock effects use separate WAVs.
+All effects share a soft mallet timbre with gentle attacks and short tails.
+Click, reveal, correct, wrong, win, unlock, ticket conversion, equip and pause
+each use a separate WAV. Clicks play once per action; a muted game plays no
+effects. Ticket conversion sounds only after Next, not while waiting.
+`MUSIC-CREDITS.txt` lists the music license and all effect filenames.
 Music uses a separate Windows
 audio channel, so feedback does not cut off the loop. S stops both channels;
 closing the game releases the music device. Tests and QA leave music disabled.
@@ -315,7 +331,8 @@ the score, lives, current phase and sprites; it is not another saved game.
 
 | Phase | What happens | Next phase |
 | --- | --- | --- |
-| `menu` | Choose mode and difficulty | `story` or `reveal` |
+| `menu` | Resume a saved run or open New game; choose settings if no save exists | Saved phase, `menu_setup`, `story` or `reveal` |
+| `menu_setup` | Choose a new mode and difficulty; Start replaces the checkpoint; Back keeps it | `menu`, `story` or `reveal` |
 | `story` | Read one brief line, then press Play | `reveal` |
 | `reveal` | Lift the cup holding the coin | `shuffle` |
 | `shuffle` | Animate swaps and update numbered positions | `select` |

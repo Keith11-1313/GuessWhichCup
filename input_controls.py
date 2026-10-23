@@ -67,8 +67,7 @@ class InputControls:
             button = self.button_at(x, y)
             if button is None:
                 return
-            self.session.play_tone("click")
-            if self.session.state == "menu":
+            if self.session.state in ("menu", "menu_setup"):
                 self.menu_action(button)
             elif self.session.state in ("story", "cabinet", "odds", "gacha_reveal"):
                 self.collection_action(button)
@@ -77,12 +76,17 @@ class InputControls:
 
     def menu_action(self, button):
         """Apply one menu choice and redraw only when its setting changes."""
-        if button.startswith("mode:"):
-            self.session.mode = button.split(":", 1)[1]
+        setup = self.session.state == "menu_setup"
+        if button == "new_game_setup":
+            self.views.show_menu(new_game=True)
+        elif button == "back_saved":
             self.views.show_menu()
+        elif button.startswith("mode:"):
+            self.session.mode = button.split(":", 1)[1]
+            self.views.show_menu(new_game=setup)
         elif button.startswith("diff:"):
             self.session.difficulty = button.split(":", 1)[1]
-            self.views.show_menu()
+            self.views.show_menu(new_game=setup)
         elif button == "start":
             self.rounds.start_game()
         elif button == "resume_run":
@@ -101,7 +105,9 @@ class InputControls:
         if self.session.state == "paused":
             self.session.pause_menu.resume()
             return
-        if self.session.state == "menu":
+        if self.session.state == "menu_setup":
+            self.rounds.start_game()
+        elif self.session.state == "menu":
             if self.session.saved_run:
                 if not self.session.progress.restore():
                     self.views.show_menu()
@@ -163,21 +169,27 @@ class InputControls:
         self.views.draw_footer()
 
     def cycle_mode(self):
-        if self.session.state == "menu":
+        if self.session.state == "menu" and self.session.saved_run:
+            return
+        if self.session.state in ("menu", "menu_setup"):
+            setup = self.session.state == "menu_setup"
             self.session.mode = "Endless" if self.session.mode == "Story" else "Story"
-            self.views.show_menu()
+            self.views.show_menu(new_game=setup)
 
     def adjust_music_volume(self, step):
         self.session.music.set_volume(self.session.music.volume + step)
         self.views.draw_footer()
 
     def cycle_difficulty(self, direction=1):
-        if self.session.state == "menu":
+        if self.session.state == "menu" and self.session.saved_run:
+            return
+        if self.session.state in ("menu", "menu_setup"):
+            setup = self.session.state == "menu_setup"
             names = list(DIFFICULTIES)
             self.session.difficulty = names[
                 (names.index(self.session.difficulty) + direction) % len(names)
             ]
-            self.views.show_menu()
+            self.views.show_menu(new_game=setup)
 
     def request_menu(self):
         if self.session.state in RUN_STATES or self.session.state == "paused":
@@ -253,6 +265,7 @@ class InputControls:
         elif key.startswith("equip:"):
             skin = key.split(":", 1)[1]
             if collection.equip(self.session.profile_path, self.session.profile, skin):
+                self.session.play_tone("equip")
                 self.session.update_window_icon()
                 self.cabinet.show_cabinet("Cup equipped.")
             else:

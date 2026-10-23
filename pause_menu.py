@@ -17,6 +17,7 @@ class PauseMenu:
             return
         g.paused_state, g.state = g.state, "paused"
         self.previous_buttons = dict(g.buttons)
+        g.play_tone("pause")
         self.draw()
 
     def draw(self, error=""):

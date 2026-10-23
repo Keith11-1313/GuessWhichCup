@@ -241,4 +241,5 @@ class CupCabinet:
         self.views.set_message("Duplicate converted", "+1 ticket added to your cabinet.")
         self.views.draw_button("cabinet", "Keep browsing", 340, -260, 202, True)
         self.session.effects.duplicate(self.session.pending_cup)
+        self.session.play_tone("ticket")
         self.session.screen.update()

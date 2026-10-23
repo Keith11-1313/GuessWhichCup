@@ -32,6 +32,12 @@ class GameScreens:
             canvas.create_text(x, y, text=part, anchor="w", font=style, fill=color, tags=tags)
             x += font.Font(font=style).measure(part)
 
+    def write_fitted(self, pen, x, y, text, width, size=12, color=WHITE):
+        """Measure the actual mixed-font label before placing it in a fixed area."""
+        while size > 9 and label_width(text, size, size >= 16) > width:
+            size -= 1
+        self.write(pen, x, y, text, size, color, "left")
+
     def write_wrapped(self, pen, x, y, text, width, size=12, color=MUTED):
         """Wrap dialogue before its action button, preserving readable text."""
         measure = lambda text: label_width(text, size)
@@ -95,18 +101,21 @@ class GameScreens:
         icon_name = {
             "start": "play", "story_next": "play", "mode:Story": "book",
             "play_again": "play", "game_menu": "back", "resume": "play", "resume_run": "play",
-            "save_menu": "back", "save_exit": "back", "convert_duplicate": "play",
+            "new_game_setup": "play", "back_saved": "back", "save_menu": "back", "save_exit": "back", "convert_duplicate": "play",
             "mode:Endless": "endless", "howto": "help",
             "cabinet": "cup" if text == "Cup cabinet" else "back",
             "draw": "ticket", "odds": "odds", "back": "back",
         }.get(name)
-        text_width = label_width(text, 12)
         offset = 24 if icon_name else 0
+        size = 12
+        while size > 9 and label_width(text, size) + offset > width - 28:
+            size -= 1
+        text_width = label_width(text, size)
         left = x - (text_width + offset) / 2
         if icon_name:
             palette = "icons_dark" if active else "icons"
             place_image(self, self.session.assets[palette][icon_name], left, y + 8)
-        self.canvas_label(left + offset, -y, text, 12,
+        self.canvas_label(left + offset, -y, text, size,
                           "#2b2030" if active else WHITE, (self.session.art_layer,))
         self.session.buttons[name] = (x - width / 2, y - 22, x + width / 2, y + 22)
 
@@ -155,9 +164,9 @@ class GameScreens:
         self.draw_button("back", "Back to the party", 312, -260, 242, True)
         self.session.screen.update()
 
-    def show_menu(self):
+    def show_menu(self, new_game=False):
         self.session.update_window_icon()
-        self.session.state = "menu"
+        self.session.state = "menu_setup" if new_game else "menu"
         self.session.clear_cups()
         self.draw_background(view="menu")
         self.session.menu_text.clear()
@@ -165,58 +174,10 @@ class GameScreens:
         self.session.message.clear()
         self.session.buttons = {}
         frame(self, -8, -175, 470, 236, "#241d30")
-        self.write(self.session.menu_text, 24, 198, "Your invitation", 22, GOLD, "left")
-        self.write(
-            self.session.menu_text,
-            24,
-            167,
-            "A hidden coin. A table full of friends.",
-            12,
-            WHITE,
-            "left",
-        )
-
-        self.rectangle(24, 145, 435, 146, "#533f53")
-        self.write(
-            self.session.menu_text, 24, 119, "Choose your evening", 12, MUTED, "left"
-        )
-        self.draw_button(
-            "mode:Story", "Story", 125, 85, 190, self.session.mode == "Story"
-        )
-        self.draw_button(
-            "mode:Endless", "Endless", 335, 85, 190, self.session.mode == "Endless"
-        )
-        mode_detail = (
-            "Ten chapters with Mira, Theo & Jun."
-            if self.session.mode == "Story"
-            else "The afterparty. Keep your streak alive."
-        )
-        if self.session.saved_run:
-            saved = self.session.saved_run
-            mode_detail = f"Saved {saved['mode']} run at level {saved['level']}"
-        self.write(self.session.menu_text, 24, 43, mode_detail, 11, MUTED, "left")
-        self.write(self.session.menu_text, 24, -13, "Set the pace", 12, MUTED, "left")
-        for x, name in ((91, "Easy"), (231, "Normal"), (371, "Hard")):
-            self.draw_button(
-                "diff:" + name, name, x, -49, 122, self.session.difficulty == name
-            )
-        lives = DIFFICULTIES[self.session.difficulty]["lives"]
-        self.write(
-            self.session.menu_text,
-            24,
-            -94,
-            f"{lives} lives",
-            11,
-            MUTED,
-            "left",
-        )
-        self.write(self.session.menu_text, 430, -94, f"Best score {self.session.best_score():,}", 11, MUTED, "right")
-        if self.session.saved_run:
-            self.draw_button("resume_run", "Resume run", 125, -137, 190, True)
-            self.draw_button("start", "New game", 335, -137, 190)
+        if self.session.saved_run and not new_game:
+            self.draw_saved_run_menu()
         else:
-            self.draw_button("start", "Join the party", 152, -137, 244, True)
-            self.draw_button("howto", "How to play", 359, -137, 142)
+            self.draw_new_game_menu(new_game)
         frame(self, -470, -292, 470, -197, "#211b2c")
         place_image(self, self.session.assets["icons"]["cup"], -438, -210)
         self.write(self.session.menu_text, -412, -230, "Your cups", 16, WHITE, "left")
@@ -233,6 +194,69 @@ class GameScreens:
         self.write(self.session.menu_text, -186, -259, f"{self.session.profile['tickets']} tickets", 12, MUTED, "left")
         self.draw_button("cabinet", "Cup cabinet", 321, -245, 228)
         self.session.screen.update()
+
+    def draw_choice_card(self, name, title, detail, x, bottom, width, height, selected, hearts=0):
+        """The entire card is clickable; a tick distinguishes selection from Start."""
+        fill = "#383044" if selected else "#292233"
+        edge = GOLD if selected else "#614b60"
+        frame(self, x, bottom, x + width, bottom + height, fill, edge)
+        if selected:
+            self.rectangle(x + 2, bottom + 2, x + 5, bottom + height - 2, GOLD)
+            canvas = self.session.screen.getcanvas()
+            cx, cy = x + width - 19, -(bottom + height - 17)
+            canvas.create_line(cx - 5, cy, cx - 1, cy + 4, cx + 6, cy - 5,
+                               fill=GOLD, width=2, tags=(self.session.art_layer,))
+        self.write_fitted(self.session.menu_text, x + 14, bottom + height - 31,
+                          title, width - 55, 15, GOLD if selected else WHITE)
+        if hearts:
+            for index in range(hearts):
+                place_image(self, self.session.assets["heart_full"], x + 10 + index * 22, bottom + 29)
+        else:
+            self.write_fitted(self.session.menu_text, x + 14, bottom + 17, detail, width - 28, 11, MUTED)
+        self.session.buttons[name] = (x, bottom, x + width, bottom + height)
+
+    def draw_new_game_menu(self, new_game):
+        g, pen = self.session, self.session.menu_text
+        self.write(pen, 24, 196, "New game", 24, GOLD, "left")
+        self.write(pen, 24, 163, "Game mode", 12, MUTED, "left")
+        for x, mode, detail in ((24, "Story", "10 story chapters"), (240, "Endless", "No round limit")):
+            self.draw_choice_card("mode:" + mode, mode, detail, x, 60, 194, 87, g.mode == mode)
+        self.write(pen, 24, 28, "Difficulty", 12, MUTED, "left")
+        for x, difficulty in ((24, "Easy"), (164, "Normal"), (304, "Hard")):
+            self.draw_choice_card("diff:" + difficulty, difficulty, "", x, -63, 130, 76,
+                                  g.difficulty == difficulty, DIFFICULTIES[difficulty]["lives"])
+        pace = {"Easy": "Slower shuffles", "Normal": "Balanced speed", "Hard": "Faster shuffles"}[g.difficulty]
+        self.write(pen, 24, -88, pace, 11, MUTED, "left")
+        self.write(pen, 434, -88, f"Best {g.best_score():,}", 11, MUTED, "right")
+        if g.saved_run:
+            self.write_fitted(pen, 24, -112, "Start replaces your saved game. Back keeps it.", 410, 10, "#e4bc88")
+        self.draw_button("start", "Start " + g.mode, 159, -143, 258, True)
+        self.draw_button("back_saved" if new_game else "howto", "Back" if new_game else "How to play", 370, -143, 128)
+
+    def draw_saved_run_menu(self):
+        """Summarize the saved game before offering a single primary action."""
+        g, pen = self.session, self.session.menu_text
+        saved = g.saved_run
+        self.write(pen, 24, 195, "Welcome back", 24, GOLD, "left")
+        self.write(pen, 24, 164, "Your last saved game", 12, "#a9d7ab", "left")
+        self.rectangle(24, -39, 434, 144, "#2b2637")
+        self.rectangle(24, -39, 28, 144, "#8ab69d")
+        icon = "book" if saved["mode"] == "Story" else "endless"
+        place_image(self, g.assets["icons"][icon], 42, 126)
+        self.write(pen, 68, 108, saved["mode"], 22, WHITE, "left")
+        self.write(pen, 416, 113, saved["difficulty"], 12, MUTED, "right")
+        setting = LOCATION_NAMES[location(saved["mode"], saved["level"])]
+        self.write(pen, 42, 82, setting, 11, MUTED, "left")
+        self.write(pen, 42, 46, "Chapter" if saved["mode"] == "Story" else "Round", 11, MUTED, "left")
+        self.write(pen, 246, 46, "Score", 11, MUTED, "left")
+        self.write(pen, 42, 12, str(saved["level"]), 24, WHITE, "left")
+        self.write_fitted(pen, 246, 12, f"{saved['score']:,}", 172, 24, WHITE)
+        self.write(pen, 42, -22, "Lives left", 11, MUTED, "left")
+        for index in range(DIFFICULTIES[saved["difficulty"]]["lives"]):
+            icon = "heart_full" if index < saved["lives"] else "heart_empty"
+            place_image(self, g.assets[icon], 246 + index * 29, -5)
+        self.draw_button("resume_run", f"Resume {saved['mode']}", 231, -85, 400, True)
+        self.draw_button("new_game_setup", "Start a different game", 231, -143, 400)
 
     def show_game_over(self):
         """Dedicated end-of-run scene; displaying it never changes saved progress."""
@@ -342,8 +366,11 @@ class GameScreens:
         self.session.screen.getcanvas().delete("footer_art")
         self.session.footer_actions = {}
         state = self.session.state
-        if state == "menu":
-            left = [("advance", "Enter  Play"), ("help", "H  Help")]
+        if state == "menu_setup":
+            left = [("advance", "Enter  Start " + self.session.mode)]
+            right = ("escape", "Esc  Back")
+        elif state == "menu":
+            left = [("advance", "Enter  Resume saved" if self.session.saved_run else "Enter  Play"), ("help", "H  Help")]
             right = ("escape", "Esc  Quit")
         elif state == "paused":
             left = [("pause", "P  Resume"), ("sound", "S  Sound on" if self.session.sound_enabled else "S  Sound off")]

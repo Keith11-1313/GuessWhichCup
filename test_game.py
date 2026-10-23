@@ -8,6 +8,8 @@ from collections import Counter
 import copy
 import tempfile
 import unittest
+import wave
+from array import array
 from unittest.mock import patch
 
 import what_the_cup as app
@@ -227,6 +229,26 @@ class GameTests(unittest.TestCase):
 
         g.views.show_menu()
         verify()
+        for mode in ("Story", "Endless"):
+            for difficulty in DIFFICULTIES:
+                g.mode, g.difficulty = mode, difficulty
+                g.views.show_menu(new_game=True)
+                verify()
+                for item in canvas.find_all():
+                    if canvas.type(item) != "text":
+                        continue
+                    left, top, right, bottom = canvas.bbox(item)
+                    for key, (x1, y1, x2, y2) in g.buttons.items():
+                        if key.startswith(("mode:", "diff:")) and x1 <= left < x2 and -y2 <= top < -y1:
+                            self.assertGreaterEqual(left, x1 + 8)
+                            self.assertLessEqual(right, x2 - 8, canvas.itemcget(item, "text"))
+        self.start_gameplay()
+        g.controls.request_menu()
+        g.pause_menu.save_and_leave()
+        g.saved_run["score"] = 999_999_999_999
+        g.views.show_menu()
+        verify()
+        g.progress.clear()
         g.views.show_how_to_play()
         verify()
         for level in range(1, 11):
@@ -437,6 +459,31 @@ class GameTests(unittest.TestCase):
         self.assertEqual(frames, (g.completed_swaps, g.swap_frame))
         self.finish_shuffle()
         self.assertEqual(g.state, "select")
+
+    def test_saved_menu_settings_do_not_change_the_checkpoint(self):
+        g = self.game
+        g.mode, g.difficulty = "Endless", "Hard"
+        self.start_gameplay()
+        g.controls.request_menu()
+        self.click_button("save_menu")
+        original = g.progress.path.read_bytes()
+        self.assertNotIn("mode:Story", g.buttons)
+        self.assertNotIn("diff:Easy", g.buttons)
+        self.click_button("new_game_setup")
+        self.assertEqual(g.state, "menu_setup")
+        g.controls.cycle_difficulty()
+        self.assertEqual(g.state, "menu_setup")
+        with patch.object(g.views, "write", wraps=g.views.write) as write:
+            self.click_button("mode:Story")
+            self.click_button("diff:Easy")
+            labels = [call.args[3] for call in write.call_args_list]
+        self.assertIn("New game", labels)
+        self.assertNotIn("resume_run", g.buttons)
+        self.assertEqual(g.progress.path.read_bytes(), original)
+        self.click_button("back_saved")
+        self.assertEqual(g.state, "menu")
+        self.click_button("resume_run")
+        self.assertEqual((g.mode, g.difficulty), ("Endless", "Hard"))
 
     def test_pause_save_failure_stays_open_and_exit_saves_first(self):
         g = self.game
@@ -782,14 +829,40 @@ class GameTests(unittest.TestCase):
 
         with patch.object(winsound, "PlaySound") as playback:
             with patch.object(winsound, "MessageBeep") as system_alert:
-                for kind in ("reveal", "correct", "wrong", "win"):
+                for kind in ("click", "reveal", "correct", "wrong", "win", "unlock", "ticket", "equip", "pause"):
                     game_objects.tone(kind)
                     path, flags = playback.call_args.args
                     self.assertTrue(Path(path).is_file())
                     self.assertTrue(flags & winsound.SND_ASYNC)
                     self.assertTrue(flags & winsound.SND_NODEFAULT)
-                self.assertEqual(playback.call_count, 4)
+                self.assertEqual(playback.call_count, 9)
                 system_alert.assert_not_called()
+
+    def test_audio_assets_have_safe_levels_and_clean_effect_endpoints(self):
+        folder = Path(game_objects.__file__).parent / "assets" / "sounds"
+        for path in folder.glob("*.wav"):
+            with self.subTest(sound=path.name), wave.open(str(path), "rb") as sound:
+                self.assertEqual(sound.getsampwidth(), 2)
+                self.assertEqual(sound.getnchannels(), 2)
+                self.assertEqual(sound.getframerate(), 22050)
+                samples = array("h", sound.readframes(sound.getnframes()))
+                peak = max(abs(value) for value in samples)
+                self.assertGreater(peak, 100)
+                self.assertLess(peak, 32700, "Audio clips at full scale")
+                if path.stem != "lantern_party":
+                    self.assertLessEqual(peak, 5000, "Effect is too loud for the set")
+                    self.assertLessEqual(max(abs(value) for value in samples[:2] + samples[-2:]), 4)
+
+    def test_menu_click_plays_feedback_once_and_mute_blocks_effects(self):
+        g = self.game
+        g.views.show_menu()
+        with patch.object(g, "play_tone") as sound:
+            self.click_button("mode:Endless")
+            sound.assert_called_once_with("click")
+        g.sound_enabled = False
+        with patch("what_the_cup.tone") as sound:
+            g.play_tone("correct")
+            sound.assert_not_called()
 
     def test_cup_numbers_use_clear_font_and_fit_number_chips(self):
         from tkinter import font

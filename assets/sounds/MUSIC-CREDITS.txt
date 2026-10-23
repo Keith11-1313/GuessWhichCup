@@ -1,0 +1,24 @@
+Background music: Cozy Puzzle Stage Select
+Composer: MintoDog
+Source: https://opengameart.org/content/cozy-puzzle-stage-select
+License: CC0 1.0 Universal
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+Source downloaded: October 24, 2026
+
+The creator describes the track as loopable stage-select music for puzzle games.
+The original MP3 was converted to 22,050 Hz, stereo, 16-bit PCM WAV
+and loudness-normalized to -22 LUFS with a -3 dBTP ceiling.
+Runtime file: lantern_party.wav
+Other short WAV sound effects in this folder are original project sounds.
+
+Sound set revised October 24, 2026:
+click.wav: soft menu tap
+reveal.wav: two-note coin cue
+correct.wav: ascending reward triad
+wrong.wav: gentle descending cue
+win.wav: extended completion cadence
+unlock.wav: rising cup-unlock flourish
+ticket.wav: duplicate-to-ticket confirmation
+equip.wav: short equip confirmation
+pause.wav: low, quiet pause cue
+All effects use 22,050 Hz stereo 16-bit PCM, with fade-in/out and short room tails.
