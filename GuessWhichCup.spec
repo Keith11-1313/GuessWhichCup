@@ -1,4 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
+from pathlib import Path
+
+version = Path('VERSION').read_text(encoding='utf-8').strip()
 
 
 a = Analysis(
@@ -22,7 +25,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='GuessWhichCup',
+    name='GuessWhichCup-v' + version,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -35,4 +38,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=['assets/ui/app_icon.ico'],
 )

@@ -1,8 +1,9 @@
 """Keyboard binding, click hitboxes and state-dependent navigation."""
 
-import time
+import sys
 from game_config import DIFFICULTIES, RESULT_BUTTON_BOUNDS
 import cup_collection as collection
+from run_progress import RUN_STATES
 
 
 def point_in_rectangle(x, y, bounds):
@@ -23,6 +24,7 @@ class InputControls:
         """Find the first visible button whose bounds contain the click."""
         for name, bounds in list(self.session.buttons.items()):
             if point_in_rectangle(x, y, bounds):
+                self.session.play_tone("click")
                 return name
         return None
 
@@ -34,24 +36,38 @@ class InputControls:
                     "advance": self.advance,
                     "help": self.views.show_how_to_play,
                     "escape": self.escape,
-                    "menu": self.views.show_menu,
+                    "menu": self.request_menu,
                     "pause": self.toggle_pause,
                     "sound": self.toggle_sound,
                 }
                 handlers[action]()
                 return
+        if self.session.state == "paused":
+            button = self.button_at(x, y)
+            if button == "resume":
+                self.session.pause_menu.resume()
+            elif button in ("save_menu", "save_exit"):
+                self.session.pause_menu.save_and_leave(exit_app=button == "save_exit")
+            return
         if self.session.state == "select":
             for cup in self.session.cups:
                 if cup.contains(x, y):
                     self.rounds.choose(cup.slot)
                     return
-        elif self.session.state in ("result", "retry", "over", "victory"):
+        elif self.session.state == "over":
+            button = self.button_at(x, y)
+            if button == "play_again":
+                self.advance()
+            elif button == "game_menu":
+                self.views.show_menu()
+        elif self.session.state in ("result", "retry", "victory"):
             if point_in_rectangle(x, y, RESULT_BUTTON_BOUNDS):
                 self.advance()
         else:
             button = self.button_at(x, y)
             if button is None:
                 return
+            self.session.play_tone("click")
             if self.session.state == "menu":
                 self.menu_action(button)
             elif self.session.state in ("story", "cabinet", "odds", "gacha_reveal"):
@@ -69,6 +85,9 @@ class InputControls:
             self.views.show_menu()
         elif button == "start":
             self.rounds.start_game()
+        elif button == "resume_run":
+            if not self.session.progress.restore():
+                self.views.show_menu()
         elif button == "cabinet":
             self.cabinet.show_cabinet()
         elif button == "howto":
@@ -79,21 +98,27 @@ class InputControls:
             self.cabinet.show_cabinet()
 
     def advance(self):
+        if self.session.state == "paused":
+            self.session.pause_menu.resume()
+            return
         if self.session.state == "menu":
-            self.rounds.start_game()
+            if self.session.saved_run:
+                if not self.session.progress.restore():
+                    self.views.show_menu()
+            else:
+                self.rounds.start_game()
 
         elif self.session.state == "how_to_play":
             self.views.show_menu()
 
         elif self.session.state == "story":
-            if self.session.story_page == 0:
-                self.session.story_page = 1
-                self.views.show_story()
-            else:
-                self.rounds.start_level()
+            self.rounds.start_level()
 
         elif self.session.state == "gacha_reveal":
-            self.cabinet.show_cabinet()
+            if self.cabinet.duplicate_pending:
+                self.cabinet.convert_duplicate()
+            else:
+                self.cabinet.show_cabinet()
 
         elif self.session.state == "gacha_opening":
             self.cabinet.reveal_draw()
@@ -112,10 +137,25 @@ class InputControls:
             self.rounds.start_level()
 
     def restart(self):
+        if self.session.state == "paused":
+            return
         self.rounds.start_game()
+
+    def request_help(self):
+        if self.session.state in RUN_STATES or self.session.state == "paused":
+            self.session.pause_menu.open()
+        else:
+            self.views.show_how_to_play()
 
     def toggle_sound(self):
         self.session.sound_enabled = not self.session.sound_enabled
+        if self.session.sound_enabled and self.session.audio_active:
+            self.session.music.start()
+        else:
+            self.session.music.stop()
+            if sys.platform == "win32":
+                import winsound
+                winsound.PlaySound(None, 0)
         self.session.screen.title(
             "Guess Which Cup | Lantern House | Sound "
             + ("on" if self.session.sound_enabled else "off")
@@ -127,6 +167,10 @@ class InputControls:
             self.session.mode = "Endless" if self.session.mode == "Story" else "Story"
             self.views.show_menu()
 
+    def adjust_music_volume(self, step):
+        self.session.music.set_volume(self.session.music.volume + step)
+        self.views.draw_footer()
+
     def cycle_difficulty(self, direction=1):
         if self.session.state == "menu":
             names = list(DIFFICULTIES)
@@ -135,28 +179,24 @@ class InputControls:
             ]
             self.views.show_menu()
 
+    def request_menu(self):
+        if self.session.state in RUN_STATES or self.session.state == "paused":
+            self.session.pause_menu.open()
+        else:
+            self.views.show_menu()
+
     def toggle_pause(self):
         if self.session.state == "paused":
-            self.session.state = self.session.paused_state
-            self.session.last_tick = time.monotonic()
-            self.session.frame_credit = 0.0
-            if self.session.state == "select":
-                self.views.set_message(
-                    "Where is the spark?", self.rounds.selection_hint()
-                )
-            elif self.session.state == "reveal":
-                self.views.set_message(
-                    "Remember the spark", "Watch which cup holds it."
-                )
-            else:
-                self.views.set_message("Follow the cup", "")
-        elif self.session.state in ("reveal", "shuffle", "select"):
-            self.session.paused_state = self.session.state
-            self.session.state = "paused"
-            self.views.set_message("Paused", "")
+            self.session.pause_menu.resume()
+        else:
+            self.session.pause_menu.open()
 
     def escape(self):
-        if self.session.state == "menu":
+        if self.session.state == "paused":
+            self.session.pause_menu.resume()
+        elif self.session.state in RUN_STATES:
+            self.session.pause_menu.open()
+        elif self.session.state == "menu":
             self.session.close()
         elif self.session.state in ("odds", "gacha_reveal", "gacha_opening"):
             self.cabinet.show_cabinet()
@@ -171,10 +211,10 @@ class InputControls:
             self.session.screen.onkeypress(self.advance, key)
 
         for key in ("m", "M"):
-            self.session.screen.onkeypress(self.views.show_menu, key)
+            self.session.screen.onkeypress(self.request_menu, key)
 
         for key in ("h", "H"):
-            self.session.screen.onkeypress(self.views.show_how_to_play, key)
+            self.session.screen.onkeypress(self.request_help, key)
 
         for key in ("r", "R"):
             self.session.screen.onkeypress(self.restart, key)
@@ -189,6 +229,8 @@ class InputControls:
         self.session.screen.onkeypress(self.toggle_sound, "s")
         self.session.screen.onkeypress(self.toggle_pause, "P")
         self.session.screen.onkeypress(self.toggle_sound, "S")
+        self.session.screen.onkeypress(lambda: self.adjust_music_volume(-5), "bracketleft")
+        self.session.screen.onkeypress(lambda: self.adjust_music_volume(5), "bracketright")
         for key in ("c", "C"):
             self.session.screen.onkeypress(self.open_cabinet_from_menu, key)
         self.session.screen.onkeypress(self.cycle_mode, "Tab")
@@ -196,7 +238,9 @@ class InputControls:
         self.session.screen.onkeypress(self.cycle_difficulty, "Right")
 
     def collection_action(self, key):
-        if key == "story_next":
+        if key == "convert_duplicate":
+            self.cabinet.convert_duplicate()
+        elif key == "story_next":
             self.advance()
         elif key == "draw":
             self.cabinet.draw_cup()
@@ -209,6 +253,7 @@ class InputControls:
         elif key.startswith("equip:"):
             skin = key.split(":", 1)[1]
             if collection.equip(self.session.profile_path, self.session.profile, skin):
+                self.session.update_window_icon()
                 self.cabinet.show_cabinet("Cup equipped.")
             else:
                 self.cabinet.show_cabinet("Could not save. Try again.")

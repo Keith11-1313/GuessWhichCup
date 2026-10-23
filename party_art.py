@@ -26,26 +26,36 @@ def load_assets(screen):
             screen.register_shape(skin + "_" + suffix, turtle.Shape("image", image))
     secret = load("cups/unknown.png").zoom(2)
     screen.register_shape("secret_preview", turtle.Shape("image", secret))
-    spark = load("ui/spark.png")
-    screen.register_shape("spark", turtle.Shape("image", spark))
+    coin = load("ui/coin.png")
+    screen.register_shape("coin", turtle.Shape("image", coin))
     backgrounds = {
         name: load(f"backgrounds/{name}.png")
         for name in ("menu", "hall", "kitchen", "terrace", "dawn", "afterparty")
     }
-    portraits = {
-        name: load(f"characters/{name}.png").zoom(6)
-        for name in ("mira", "theo", "jun")
-    }
     return {
         "skins": skins,
         "secret": secret,
-        "spark": spark,
+        "coin": coin,
         "backgrounds": backgrounds,
-        "portraits": portraits,
         "title": load("ui/title.png"),
         "heart_full": load("ui/heart_full.png"),
         "heart_empty": load("ui/heart_empty.png"),
-        "spark_hint": load("ui/spark_hint.png"),
+        "coin_hint": load("ui/coin_hint.png"),
+        "app_icon": load("ui/app_icon.png"),
+        "party_over": load("backgrounds/party_over.png"),
+        "cabinet_reveal": load("backgrounds/cabinet_reveal.png"),
+        "lock_badge": load("ui/lock_badge.png"),
+        "ticket_reward": load("ui/ticket.png").zoom(4),
+        "draw_mystery": load("cups/unknown.png").zoom(4),
+        "unlock_frames": [load(f"ui/unlock_{index}.png").zoom(3) for index in range(4)],
+        "icons": {
+            name: load(f"ui/{name}.png")
+            for name in ("play", "book", "endless", "help", "cup", "ticket", "odds", "back")
+        },
+        "icons_dark": {
+            name: load(f"ui/{name}_dark.png")
+            for name in ("play", "book", "endless", "help", "cup", "ticket", "odds", "back")
+        },
     }
 
 
@@ -63,19 +73,20 @@ def scenery(game, menu=False):
     game.rectangle(-470, -174, right, 236, "#191522")
     place_image(game, game.session.assets["backgrounds"][name], -470, 236)
     if menu:
+        # Keep the equipped cup separate from the room artwork.
+        skin = game.session.profile["equipped"]
+        game.session.screen.getcanvas().create_image(
+            -361, -90, image=game.session.assets["skins"][skin][3],
+            anchor="nw", tags=("scene", "menu_cup"),
+        )
         # Text stays editable and crisp rather than being baked into the picture.
         pen = game.session.static
         game.write(pen, -170, 146, "LANTERN HOUSE", 13, "#e7c795")
         game.write(pen, -170, 123, "Est. after sundown", 10, "#b59aaf")
-        game.write(pen, -252, -147, "Mira & Theo are saving you a seat.", 10, "#dfc3a8")
 
 
 def draw_title(game, x, y):
     place_image(game, game.session.assets["title"], x, y)
-
-
-def portrait(game, name, x, y):
-    place_image(game, game.session.assets["portraits"][name.lower()], x, y + 138)
 
 
 def frame(game, x1, y1, x2, y2, fill="#241d30", edge="#715166"):

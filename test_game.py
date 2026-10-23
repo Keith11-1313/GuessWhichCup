@@ -14,6 +14,10 @@ import what_the_cup as app
 import cup_collection as collection
 import party_art
 import game_objects
+from run_progress import load_run
+from game_audio import BackgroundMusic
+from game_theme import FONT_FAMILY, text_font
+from collection_screens import DRAW_FRAMES
 from game_config import DIFFICULTIES, STORY_LEVELS, level_settings
 from score_store import load_scores, save_score
 
@@ -138,6 +142,7 @@ class GameTests(unittest.TestCase):
 
     def setUp(self):
         random.seed(27)
+        self.game.progress.clear()
         self.game.profile = collection.fresh_profile()
         self.game.reward_failed = False
         self.game.mode = "Story"
@@ -176,7 +181,7 @@ class GameTests(unittest.TestCase):
             g.level = level
             g.rounds.start_level()
             self.finish_shuffle()
-            text = " ".join(
+            text = "".join(
                 g.screen.getcanvas().itemcget(i, "text")
                 for i in g.screen.getcanvas().find_all()
                 if g.screen.getcanvas().type(i) == "text"
@@ -199,6 +204,8 @@ class GameTests(unittest.TestCase):
 
         def verify():
             g.screen.update()
+            for bounds in g.buttons.values():
+                self.assertGreaterEqual(bounds[1], -282, "Action touches bottom panel border")
             for item in canvas.find_all():
                 if canvas.type(item) != "text":
                     continue
@@ -218,6 +225,10 @@ class GameTests(unittest.TestCase):
                             (g.state, key, label, "text overlaps action"),
                         )
 
+        g.views.show_menu()
+        verify()
+        g.views.show_how_to_play()
+        verify()
         for level in range(1, 11):
             g.level = level
             g.rounds.begin_chapter()
@@ -265,13 +276,10 @@ class GameTests(unittest.TestCase):
             g.level = level
             g.rounds.begin_chapter()
             self.assertEqual(g.state, "story")
-            self.assertEqual(g.story_page, 0)
             self.assertEqual(g.cups, [])
             settings.append(g.scene_location)
             g.rounds.choose(0)
             self.assertEqual(g.state, "story")
-            self.click_button("story_next")
-            self.assertEqual((g.state, g.story_page), ("story", 1))
             self.click_button("story_next")
             self.assertEqual(g.state, "reveal")
             self.assertEqual(g.scene_location, settings[-1])
@@ -300,11 +308,14 @@ class GameTests(unittest.TestCase):
             tickets = g.profile["tickets"]
             g.cabinet.draw_cup()
             self.assertEqual(g.profile["tickets"], tickets)
-            for _ in range(48):
+            for _ in range(DRAW_FRAMES):
                 if g.state == "gacha_opening":
                     g.cabinet.animate_draw()
             self.assertEqual(g.state, "gacha_reveal")
             self.assertEqual(g.pending_cup, skin)
+            if g.cabinet.duplicate_pending:
+                self.click_button("convert_duplicate")
+                self.click_button("cabinet")
             self.click_button("equip:" + skin)
             self.assertEqual(g.profile["equipped"], skin)
             self.assertEqual(
@@ -318,6 +329,71 @@ class GameTests(unittest.TestCase):
         self.click_button("draw")
         self.assertEqual(g.state, "cabinet")
         self.assertEqual(g.profile["tickets"], 0)
+
+    def test_lock_overlay_unlock_phases_and_duplicate_behavior(self):
+        g = self.game
+        g.profile = collection.fresh_profile()
+        g.profile["tickets"] = 12
+        g.cabinet.show_cabinet()
+        canvas = g.screen.getcanvas()
+        self.assertEqual(len(canvas.find_withtag("cup_lock")), 5)
+        self.assertFalse(canvas.find_withtag("lock:normal"))
+        self.assertFalse(any(
+            canvas.type(item) == "text" and canvas.itemcget(item, "text") == "Locked"
+            for item in canvas.find_all()
+        ))
+        with patch("cup_collection.random.randrange", return_value=7700):
+            g.cabinet.draw_cup()
+        self.assertEqual(g.draw_status, "new")
+        saved_tickets = g.profile["tickets"]
+        seen = set()
+        for _ in range(DRAW_FRAMES):
+            for item in canvas.find_withtag("unlock_lock"):
+                seen.add(canvas.itemcget(item, "image"))
+            if g.state == "gacha_opening":
+                g.cabinet.animate_draw()
+        self.assertEqual(len(seen), 4)
+        self.assertEqual(g.state, "gacha_reveal")
+        self.assertFalse(canvas.find_withtag("unlock_lock"))
+        self.assertEqual(g.profile["tickets"], saved_tickets)
+        g.cabinet.show_cabinet()
+        self.assertFalse(canvas.find_withtag("lock:rare"))
+
+        self.assertEqual(len(canvas.find_withtag("cup_lock")), 4)
+        with patch("cup_collection.random.randrange", return_value=7700):
+            g.cabinet.draw_cup()
+        self.assertEqual(g.draw_status, "duplicate")
+        self.assertFalse(canvas.find_withtag("unlock_lock"))
+        g.controls.advance()
+        g.cabinet.show_cabinet()
+        self.assertFalse(canvas.find_withtag("lock:rare"))
+
+    def test_menu_cup_reflects_equipped_skin(self):
+        g = self.game
+        canvas = g.screen.getcanvas()
+        g.profile["owned"] = [cup[0] for cup in collection.CUPS]
+        for skin, *_ in collection.CUPS:
+            self.assertTrue(collection.equip(g.profile_path, g.profile, skin))
+            g.views.show_menu()
+            images = canvas.find_withtag("menu_cup")
+            self.assertEqual(len(images), 1)
+            self.assertEqual(canvas.itemcget(images[0], "image"), str(g.assets["skins"][skin][3]))
+            self.assertEqual(canvas.coords(images[0]), [-361.0, -90.0])
+            self.start_gameplay()
+            self.assertEqual({cup.sprite.shape() for cup in g.cups}, {skin + "_cup"})
+
+    def test_music_volume_is_clamped_and_separate_from_mute(self):
+        g = self.game
+        was_enabled = g.sound_enabled
+        g.music.set_volume(20)
+        g.controls.adjust_music_volume(-5)
+        self.assertEqual(g.music.volume, 15)
+        g.controls.adjust_music_volume(-100)
+        self.assertEqual(g.music.volume, 0)
+        g.controls.adjust_music_volume(200)
+        self.assertEqual(g.music.volume, 100)
+        self.assertEqual(g.sound_enabled, was_enabled)
+        g.music.set_volume(20)
 
     def test_perfect_story_all_difficulties(self):
         g = self.game
@@ -339,6 +415,114 @@ class GameTests(unittest.TestCase):
             self.assertEqual(g.score, expected)
             self.assertGreaterEqual(g.best_score(), expected)
 
+    def test_pause_checkpoint_restores_exact_mid_shuffle_board(self):
+        g = self.game
+        self.start_gameplay()
+        g.rounds.begin_shuffle()
+        g.rounds.animate_swap()
+        board = [(c.cid, c.slot, c.x, c.y) for c in g.cups]
+        pair = (g.swap_pair[0].cid, g.swap_pair[1].cid, *g.swap_pair[2:])
+        frames = (g.completed_swaps, g.swap_frame)
+        g.controls.request_menu()
+        self.assertEqual(g.state, "paused")
+        g.update()
+        self.assertEqual(board, [(c.cid, c.slot, c.x, c.y) for c in g.cups])
+        self.click_button("save_menu")
+        self.assertEqual(g.state, "menu")
+        self.assertIsNotNone(load_run(g.progress.path))
+        self.click_button("resume_run")
+        self.assertEqual(g.state, "shuffle")
+        self.assertEqual(board, [(c.cid, c.slot, c.x, c.y) for c in g.cups])
+        self.assertEqual(pair, (g.swap_pair[0].cid, g.swap_pair[1].cid, *g.swap_pair[2:]))
+        self.assertEqual(frames, (g.completed_swaps, g.swap_frame))
+        self.finish_shuffle()
+        self.assertEqual(g.state, "select")
+
+    def test_pause_save_failure_stays_open_and_exit_saves_first(self):
+        g = self.game
+        self.start_gameplay()
+        self.finish_shuffle()
+        g.controls.escape()
+        with patch("run_progress.persist", return_value=False), patch.object(g, "close") as close:
+            self.click_button("save_exit")
+            close.assert_not_called()
+            self.assertEqual(g.state, "paused")
+        with patch.object(g, "close") as close:
+            self.click_button("save_exit")
+            close.assert_called_once()
+            self.assertEqual(load_run(g.progress.path)["state"], "select")
+
+    def test_checkpoint_replay_does_not_duplicate_endless_tickets(self):
+        g = self.game
+        g.mode = "Endless"
+        self.start_gameplay()
+        self.finish_shuffle()
+        g.controls.toggle_pause()
+        self.assertTrue(g.progress.save())
+        g.controls.toggle_pause()
+        before = g.profile["tickets"]
+        g.rounds.choose(g.cups[g.correct_id].slot)
+        self.assertEqual(g.profile["tickets"], before + 1)
+        self.assertTrue(g.effects.ticket)
+        self.assertTrue(g.progress.restore())
+        g.rounds.choose(g.cups[g.correct_id].slot)
+        self.assertEqual(g.profile["tickets"], before + 1)
+        self.assertFalse(g.effects.ticket)
+
+    def test_duplicate_conversion_is_visual_and_never_awards_twice(self):
+        g = self.game
+        g.cabinet.show_cabinet()
+        with patch("cup_collection.random.randrange", return_value=0):
+            g.cabinet.draw_cup()
+        g.cabinet.reveal_draw()
+        self.assertIsNone(g.effects.kind)
+        self.assertTrue(g.cabinet.duplicate_pending)
+        for _ in range(110):
+            g.effects.update()
+        self.assertIsNone(g.effects.kind)
+        bounds = g.buttons["convert_duplicate"]
+        g.controls.on_click((bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2)
+        self.assertEqual(g.effects.kind, "duplicate")
+        self.assertFalse(g.cabinet.duplicate_pending)
+        g.cabinet.convert_duplicate()
+        self.assertEqual(g.profile["tickets"], 1)
+        for _ in range(110):
+            g.effects.update()
+        self.assertEqual(g.profile["tickets"], 1)
+        canvas = g.screen.getcanvas()
+        images = [canvas.itemcget(i, "image") for i in canvas.find_withtag("reward_fx") if canvas.type(i) == "image"]
+        self.assertIn(str(g.assets["ticket_reward"]), images)
+        g.cabinet.show_cabinet()
+        self.assertFalse(canvas.find_withtag("reward_fx"))
+
+    def test_coin_and_equipped_window_icon(self):
+        g = self.game
+        self.assertEqual(g.coin.shape(), "coin")
+        self.assertEqual((g.assets["coin"].width(), g.assets["coin"].height()), (24, 24))
+        g.profile["owned"].append("legendary")
+        g.icon_skin = None
+        root = g.screen.getcanvas().winfo_toplevel()
+        with patch.object(root, "iconphoto", wraps=root.iconphoto) as icon:
+            g.controls.collection_action("equip:legendary")
+            self.assertEqual(g.icon_skin, "legendary")
+            icon.assert_called_once_with(True, g.window_icon)
+
+    def test_invalid_checkpoint_is_ignored(self):
+        g = self.game
+        self.start_gameplay()
+        g.controls.toggle_pause()
+        self.assertTrue(g.progress.save())
+        valid = load_run(g.progress.path)
+        self.assertIsNotNone(valid)
+        for key, value in (("correct_id", 99), ("lives", -1), ("mode", "bad"), ("cups", [])):
+            data = copy.deepcopy(valid)
+            data[key] = value
+            import json
+            g.progress.path.write_text(json.dumps(data))
+            self.assertIsNone(load_run(g.progress.path))
+        g.progress.path.write_text("broken JSON")
+        self.assertIsNone(load_run(g.progress.path))
+
     def test_wrong_retry_game_over(self):
         g = self.game
         self.start_gameplay()
@@ -354,6 +538,36 @@ class GameTests(unittest.TestCase):
                 self.assertEqual(g.level, 1)
         g.controls.advance()
         self.assertEqual(g.lives, 3)
+
+    def test_dedicated_game_over_preserves_progress_and_routes_buttons(self):
+        g = self.game
+        canvas = g.screen.getcanvas()
+        for mode in ("Story", "Endless"):
+            g.mode, g.level, g.score, g.lives = mode, 4, 1234, 1
+            before = copy.deepcopy(g.profile)
+            g.rounds.start_level()
+            self.finish_shuffle()
+            wrong = next(c.slot for c in g.cups if c.cid != g.correct_id)
+            g.rounds.choose(wrong)
+            self.assertEqual((g.state, g.lives), ("over", 0))
+            self.assertEqual(g.cups, [])
+            self.assertFalse(g.coin.isvisible())
+            self.assertEqual(g.profile, before)
+            self.assertEqual(set(g.buttons), {"play_again", "game_menu"})
+            images = [canvas.itemcget(i, "image") for i in canvas.find_all() if canvas.type(i) == "image"]
+            self.assertIn(str(g.assets["party_over"]), images)
+            for item in canvas.find_all():
+                if canvas.type(item) == "text":
+                    left, top, right, bottom = canvas.bbox(item)
+                    self.assertTrue(-490 <= left < right <= 490)
+                    self.assertTrue(-345 <= top < bottom <= 345)
+            self.click_button("game_menu")
+            self.assertEqual(g.state, "menu")
+            g.views.show_game_over()
+            self.click_button("play_again")
+            self.assertEqual(g.level, 1)
+            self.assertEqual(g.score, 0)
+            self.assertEqual(g.state, "story" if mode == "Story" else "reveal")
 
     def test_endless_combo(self):
         g = self.game
@@ -473,8 +687,7 @@ class GameTests(unittest.TestCase):
         for name, image in g.assets["backgrounds"].items():
             size = (435, 410) if name == "menu" else (940, 410)
             self.assertEqual((image.width(), image.height()), size)
-        for image in g.assets["portraits"].values():
-            self.assertEqual((image.width(), image.height()), (96, 150))
+        self.assertNotIn("portraits", g.assets)
         with tempfile.TemporaryDirectory() as folder:
             with patch.object(party_art, "ASSET_FOLDER", Path(folder)):
                 with self.assertRaisesRegex(FileNotFoundError, "normal.png"):
@@ -516,8 +729,6 @@ class GameTests(unittest.TestCase):
         click("advance")
         self.assertEqual(g.state, "story")
         click("advance")
-        self.assertEqual(g.story_page, 1)
-        click("advance")
         self.assertEqual(g.state, "reveal")
         click("pause")
         self.assertEqual(g.state, "paused")
@@ -528,6 +739,8 @@ class GameTests(unittest.TestCase):
         self.assertEqual(g.state, "reveal")
         self.finish_shuffle()
         click("menu")
+        self.assertEqual(g.state, "paused")
+        self.click_button("save_menu")
         self.assertEqual(g.state, "menu")
         g.controls.open_cabinet_from_menu()
         click("escape")
@@ -541,7 +754,7 @@ class GameTests(unittest.TestCase):
             g.mode, g.level = mode, level
             g.rounds.start_level()
             self.finish_shuffle()
-            items = canvas.find_withtag("spark_hint")
+            items = canvas.find_withtag("coin_hint")
             self.assertEqual(bool(items), visible)
             if visible:
                 cup = g.cups[g.correct_id]
@@ -556,12 +769,12 @@ class GameTests(unittest.TestCase):
                 g.frame_credit = 0
                 with patch("what_the_cup.time.monotonic", return_value=100.05):
                     g.update()
-                self.assertFalse(canvas.find_withtag("spark_hint"))
-                g.views.show_spark_hint()
+                self.assertFalse(canvas.find_withtag("coin_hint"))
+                g.views.show_coin_hint()
                 g.rounds.choose(cup.slot)
-                self.assertFalse(canvas.find_withtag("spark_hint"))
+                self.assertFalse(canvas.find_withtag("coin_hint"))
         g.views.show_menu()
-        self.assertFalse(canvas.find_withtag("spark_hint"))
+        self.assertFalse(canvas.find_withtag("coin_hint"))
 
     @unittest.skipUnless(sys.platform == "win32", "Windows WAV playback backend")
     def test_custom_sound_playback_never_uses_system_alerts(self):
@@ -577,6 +790,92 @@ class GameTests(unittest.TestCase):
                     self.assertTrue(flags & winsound.SND_NODEFAULT)
                 self.assertEqual(playback.call_count, 4)
                 system_alert.assert_not_called()
+
+    def test_cup_numbers_use_clear_font_and_fit_number_chips(self):
+        from tkinter import font
+
+        g = self.game
+        g.level = 10
+        g.rounds.start_level()
+        g.screen.update()
+        canvas = g.screen.getcanvas()
+        labels = []
+        for item in canvas.find_all():
+            if canvas.type(item) != "text":
+                continue
+            text = canvas.itemcget(item, "text")
+            left, top, right, bottom = canvas.bbox(item)
+            if text in "123456" and 90 <= top <= 125:
+                actual = font.Font(font=canvas.itemcget(item, "font")).actual()
+                self.assertEqual(actual["family"], "Consolas")
+                self.assertEqual(actual["size"], 14)
+                slot = int(text) - 1
+                self.assertGreaterEqual(left, g.slots[slot] - 15)
+                self.assertLessEqual(right, g.slots[slot] + 15)
+                self.assertGreaterEqual(top, 96)
+                self.assertLessEqual(bottom, 124)
+                labels.append(text)
+        self.assertCountEqual(labels, list("123456"))
+
+    def test_bundled_font_and_keycap_bounds(self):
+        from tkinter import font
+
+        g = self.game
+        self.assertEqual(font.Font(font=text_font(12)).actual("family"), FONT_FAMILY)
+        for show in (g.views.show_menu, g.views.show_how_to_play, g.cabinet.show_cabinet):
+            show()
+            g.screen.update()
+            canvas = g.screen.getcanvas()
+            for item in canvas.find_withtag("footer_art"):
+                if canvas.type(item) == "text":
+                    left, top, right, bottom = canvas.bbox(item)
+                    self.assertTrue(-470 <= left < right <= 470)
+                    self.assertTrue(305 <= top < bottom <= 337)
+            self.assertIn("sound", g.footer_actions)
+
+    def test_story_dialogue_has_panel_padding(self):
+        g = self.game
+        g.mode = "Story"
+        canvas = g.screen.getcanvas()
+        for level in range(1, 11):
+            g.level = level
+            g.views.show_story()
+            g.screen.update()
+            for item in canvas.find_all():
+                if canvas.type(item) != "text":
+                    continue
+                left, top, right, bottom = canvas.bbox(item)
+                if 200 < top < 290 and left < 0:
+                    self.assertGreaterEqual(left, -445)
+                    self.assertLessEqual(right, 220)
+                    self.assertLessEqual(bottom, 282)
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows music backend")
+    def test_music_stops_and_restarts_without_duplicate_timers(self):
+        from unittest.mock import Mock
+
+        scheduler = Mock()
+        scheduler.after.return_value = "music_timer"
+        music = BackgroundMusic(scheduler)
+        commands = []
+
+        def command(text):
+            commands.append(text)
+            return 0
+
+        with patch.object(music, "command", side_effect=command):
+            music.start()
+            self.assertTrue(music.opened)
+            music.start()
+            self.assertEqual(scheduler.after.call_count, 1)
+            music.stop()
+            scheduler.after_cancel.assert_called_once_with("music_timer")
+            self.assertFalse(music.opened)
+            self.assertTrue(commands[-1].startswith("close "))
+            music.start()
+            self.assertTrue(music.opened)
+            self.assertEqual(scheduler.after.call_count, 2)
+            music.stop()
 
     def test_live_tk_errors_are_not_silenced(self):
         g = self.game

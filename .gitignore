@@ -2,6 +2,7 @@ __pycache__/
 *.py[cod]
 *.tmp
 /lantern_profile.json
+/lantern_run.json
 /.build-tools/
 /build/
 /dist/

@@ -23,6 +23,7 @@ def run(screenshot_dir=None):
             profile_path=Path(folder) / "profile.json",
         )
         game.sound_enabled = False
+        game.screen.title("Guess Which Cup | Automated QA - temporary saves")
         root = game.screen.getcanvas().winfo_toplevel()
         canvas = input_canvas(game.screen)
         captured = []
@@ -49,6 +50,8 @@ def run(screenshot_dir=None):
             canvas.focus_force()
             canvas.event_generate("<KeyPress>", keysym=name)
             pump(0.015)
+            if name.lower() == "m" and game.state == "paused":
+                button("save_menu")
 
         def wait_for(state, timeout=30):
             deadline = time.monotonic() + timeout
@@ -105,8 +108,6 @@ def run(screenshot_dir=None):
                 assert game.state == "story"
                 capture("complete-story-" + str(level))
                 button("story_next")
-                assert game.story_page == 1
-                key("Return")
                 assert game.state == "reveal"
                 assert {cup.sprite.shape() for cup in game.cups} == {"rare_cup"}
                 capture("complete-game-" + str(level))

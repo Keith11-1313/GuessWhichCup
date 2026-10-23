@@ -2,8 +2,9 @@
 
 from game_config import COLORS, DIFFICULTIES, RESULT_BUTTON_BOUNDS, STORY_LEVELS
 from tkinter import font
-from party_art import scenery, frame, draw_title, portrait, place_image
-from party_story import CHAPTERS, SCENES, LOCATION_NAMES, location
+from game_theme import text_font, label_runs, label_width
+from party_art import scenery, frame, draw_title, place_image
+from party_story import CHAPTERS, LOCATION_NAMES, location
 
 WHITE = COLORS["white"]
 MUTED = COLORS["muted"]
@@ -17,12 +18,35 @@ class GameScreens:
 
     def write(self, pen, x, y, text, size=16, color=WHITE, align="center"):
         pen.color(color)
-        pen.goto(x, y)
-        pen.write(
-            text,
-            align=align,
-            font=("Segoe UI", size, "bold" if size >= 16 else "normal"),
-        )
+        width = label_width(text, size, size >= 16)
+        cursor = x - width / 2 if align == "center" else x - width if align == "right" else x
+        for part, style in label_runs(text, size, size >= 16):
+            pen.goto(cursor, y)
+            pen.write(part, align="left", font=style)
+            cursor += font.Font(font=style).measure(part)
+
+    def canvas_label(self, x, y, text, size, color, tags):
+        """Draw mixed-font labels from their left edge, vertically centered."""
+        canvas = self.session.screen.getcanvas()
+        for part, style in label_runs(text, size):
+            canvas.create_text(x, y, text=part, anchor="w", font=style, fill=color, tags=tags)
+            x += font.Font(font=style).measure(part)
+
+    def write_wrapped(self, pen, x, y, text, width, size=12, color=MUTED):
+        """Wrap dialogue before its action button, preserving readable text."""
+        measure = lambda text: label_width(text, size)
+        lines = []
+        line = ""
+        for word in text.split():
+            candidate = f"{line} {word}".strip()
+            if line and measure(candidate) > width:
+                lines.append(line)
+                line = word
+            else:
+                line = candidate
+        lines.append(line)
+        for index, line in enumerate(lines):
+            self.write(pen, x, y - index * 21, line, size, color, "left")
 
     def rectangle(self, x1, y1, x2, y2, fill, outline=None):
         self.session.screen.getcanvas().create_rectangle(
@@ -37,9 +61,10 @@ class GameScreens:
         )
 
     def draw_background(self, view="game"):
+        self.session.effects.clear()
         self.session.static.clear()
         canvas = self.session.screen.getcanvas()
-        for layer in ("scene", "hud_art", "choice_art", "message_art", "draw_fx"):
+        for layer in ("scene", "hud_art", "choice_art", "message_art", "draw_fx", "pause_art"):
             canvas.delete(layer)
         self.session.art_layer = "scene"
         scenery(self, menu=view == "menu")
@@ -67,9 +92,22 @@ class GameScreens:
             fill,
             "#ffe0a0" if active else "#715166",
         )
-        self.write(
-            self.session.menu_text, x, y - 8, text, 12, "#2b2030" if active else WHITE
-        )
+        icon_name = {
+            "start": "play", "story_next": "play", "mode:Story": "book",
+            "play_again": "play", "game_menu": "back", "resume": "play", "resume_run": "play",
+            "save_menu": "back", "save_exit": "back", "convert_duplicate": "play",
+            "mode:Endless": "endless", "howto": "help",
+            "cabinet": "cup" if text == "Cup cabinet" else "back",
+            "draw": "ticket", "odds": "odds", "back": "back",
+        }.get(name)
+        text_width = label_width(text, 12)
+        offset = 24 if icon_name else 0
+        left = x - (text_width + offset) / 2
+        if icon_name:
+            palette = "icons_dark" if active else "icons"
+            place_image(self, self.session.assets[palette][icon_name], left, y + 8)
+        self.canvas_label(left + offset, -y, text, 12,
+                          "#2b2030" if active else WHITE, (self.session.art_layer,))
         self.session.buttons[name] = (x - width / 2, y - 22, x + width / 2, y + 22)
 
     def show_how_to_play(self):
@@ -88,13 +126,13 @@ class GameScreens:
             self.session.menu_text,
             -330,
             140,
-            "Three moments. One spark to keep safe.",
+            "Three moments. One lucky coin to keep safe.",
             12,
             MUTED,
             "left",
         )
         for y, title, detail in (
-            (80, "Remember", "Look for the spark underneath the lifted cup."),
+            (80, "Remember", "Look for the coin underneath the lifted cup."),
             (8, "Follow", "Track that cup as the table shuffles."),
             (-64, "Choose", "Click its cup or press the matching number."),
         ):
@@ -112,12 +150,13 @@ class GameScreens:
         )
         self.set_message(
             "Take your time",
-            "P pauses the round. Sound is optional. Results wait for you.",
+            "P pauses. Use [ and ] for music volume. S mutes sound.",
         )
-        self.draw_button("back", "Back to the party", 312, -268, 242, True)
+        self.draw_button("back", "Back to the party", 312, -260, 242, True)
         self.session.screen.update()
 
     def show_menu(self):
+        self.session.update_window_icon()
         self.session.state = "menu"
         self.session.clear_cups()
         self.draw_background(view="menu")
@@ -131,28 +170,31 @@ class GameScreens:
             self.session.menu_text,
             24,
             167,
-            "A hidden spark. A table full of friends.",
+            "A hidden coin. A table full of friends.",
             12,
             WHITE,
             "left",
         )
 
-        self.rectangle(24, 125, 435, 126, "#533f53")
+        self.rectangle(24, 145, 435, 146, "#533f53")
         self.write(
-            self.session.menu_text, 24, 99, "Choose your evening", 12, MUTED, "left"
+            self.session.menu_text, 24, 119, "Choose your evening", 12, MUTED, "left"
         )
         self.draw_button(
-            "mode:Story", "Story", 125, 65, 190, self.session.mode == "Story"
+            "mode:Story", "Story", 125, 85, 190, self.session.mode == "Story"
         )
         self.draw_button(
-            "mode:Endless", "Endless", 335, 65, 190, self.session.mode == "Endless"
+            "mode:Endless", "Endless", 335, 85, 190, self.session.mode == "Endless"
         )
         mode_detail = (
             "Ten chapters with Mira, Theo & Jun."
             if self.session.mode == "Story"
             else "The afterparty. Keep your streak alive."
         )
-        self.write(self.session.menu_text, 24, 23, mode_detail, 11, MUTED, "left")
+        if self.session.saved_run:
+            saved = self.session.saved_run
+            mode_detail = f"Saved {saved['mode']} run at level {saved['level']}"
+        self.write(self.session.menu_text, 24, 43, mode_detail, 11, MUTED, "left")
         self.write(self.session.menu_text, 24, -13, "Set the pace", 12, MUTED, "left")
         for x, name in ((91, "Easy"), (231, "Normal"), (371, "Hard")):
             self.draw_button(
@@ -163,25 +205,63 @@ class GameScreens:
             self.session.menu_text,
             24,
             -94,
-            f"{lives} lives  /  Best score  {self.session.best_score():,}",
+            f"{lives} lives",
             11,
             MUTED,
             "left",
         )
-        self.draw_button("start", "Join the party", 152, -137, 244, True)
-        self.draw_button("howto", "How to play", 359, -137, 142)
+        self.write(self.session.menu_text, 430, -94, f"Best score {self.session.best_score():,}", 11, MUTED, "right")
+        if self.session.saved_run:
+            self.draw_button("resume_run", "Resume run", 125, -137, 190, True)
+            self.draw_button("start", "New game", 335, -137, 190)
+        else:
+            self.draw_button("start", "Join the party", 152, -137, 244, True)
+            self.draw_button("howto", "How to play", 359, -137, 142)
         frame(self, -470, -292, 470, -197, "#211b2c")
-        self.write(self.session.menu_text, -438, -230, "Your cups", 16, WHITE, "left")
+        place_image(self, self.session.assets["icons"]["cup"], -438, -210)
+        self.write(self.session.menu_text, -412, -230, "Your cups", 16, WHITE, "left")
         self.write(
             self.session.menu_text,
             -438,
             -259,
-            f"{len(self.session.profile['owned'])} / 6 collected   /   {self.session.profile['tickets']} tickets",
+            f"{len(self.session.profile['owned'])} of 6 collected",
             12,
             MUTED,
             "left",
         )
+        place_image(self, self.session.assets["icons"]["ticket"], -210, -240)
+        self.write(self.session.menu_text, -186, -259, f"{self.session.profile['tickets']} tickets", 12, MUTED, "left")
         self.draw_button("cabinet", "Cup cabinet", 321, -245, 228)
+        self.session.screen.update()
+
+    def show_game_over(self):
+        """Dedicated end-of-run scene; displaying it never changes saved progress."""
+        self.session.state = "over"
+        self.session.clear_cups()
+        self.session.menu_text.clear()
+        self.session.hud_text.clear()
+        self.session.message.clear()
+        self.session.buttons = {}
+        self.draw_background()
+        frame(self, -470, -292, 470, 236, "#211b2c")
+        place_image(self, self.session.assets["party_over"], -468, 234)
+        pen = self.session.menu_text
+        self.write(pen, 0, -62, "Party over", 28, GOLD)
+        self.write(pen, 0, -91, "The coin slipped away. There is still a seat for you.", 12, WHITE)
+        progress = "Chapter" if self.session.mode == "Story" else "Round"
+        for x, label, value in (
+            (-268, "Final score", f"{self.session.score:,}"),
+            (0, "Best score", f"{self.session.best_score():,}"),
+            (268, progress, str(self.session.level)),
+        ):
+            self.write(pen, x, -132, label, 11, MUTED)
+            self.write(pen, x, -164, value, 20, WHITE)
+        warning = self.session.save_failed or self.session.reward_failed
+        if warning:
+            self.write(pen, 0, -197, "Save failed. Check folder permissions.", 11, COLORS["danger"])
+        self.draw_button("play_again", "Play again", -128, -246, 224, True)
+        self.draw_button("game_menu", "Menu", 128, -246, 224)
+        self.draw_footer()
         self.session.screen.update()
 
     def draw_hud(self):
@@ -195,7 +275,7 @@ class GameScreens:
             self.session.hud_text,
             -445,
             209,
-            f"{self.session.mode}  /  {self.session.difficulty}",
+            f"{self.session.mode}   {self.session.difficulty}",
             12,
             WHITE,
             "left",
@@ -207,7 +287,7 @@ class GameScreens:
         title = (
             f"Chapter {self.session.level} of {STORY_LEVELS}"
             if self.session.mode == "Story"
-            else f"Round {self.session.level}  /  Combo {self.session.combo}"
+            else f"Round {self.session.level}   Combo {self.session.combo}"
         )
         self.write(self.session.hud_text, -12, 207, title, 13, GOLD)
         chapter = LOCATION_NAMES[location(self.session.mode, self.session.level)]
@@ -241,7 +321,10 @@ class GameScreens:
         ):
             detail = "Save failed. Check folder permissions."
         if detail:
-            self.write(self.session.message, -442, -253, detail, 12, MUTED, "left")
+            self.write_wrapped(
+                self.session.message, -442, -251, detail,
+                650 if self.session.state in ("result", "retry", "over", "victory") else 880,
+            )
         if self.session.state in ("result", "retry", "over", "victory"):
             label = (
                 "Next"
@@ -251,7 +334,7 @@ class GameScreens:
             self.session.art_layer = "message_art"
             frame(self, *RESULT_BUTTON_BOUNDS, GOLD, "#ffe0a0")
             self.session.art_layer = "scene"
-            self.write(self.session.message, 340, -274, label, 12, "#2b2030")
+            self.write(self.session.message, 340, -269, label, 12, "#2b2030")
         self.draw_footer()
 
     def draw_footer(self):
@@ -262,49 +345,67 @@ class GameScreens:
         if state == "menu":
             left = [("advance", "Enter  Play"), ("help", "H  Help")]
             right = ("escape", "Esc  Quit")
-        elif state in ("reveal", "shuffle", "select", "paused"):
+        elif state == "paused":
+            left = [("pause", "P  Resume"), ("sound", "S  Sound on" if self.session.sound_enabled else "S  Sound off")]
+            right = ("escape", "Esc  Resume")
+        elif state in ("reveal", "shuffle", "select"):
             pause = "P  Resume" if state == "paused" else "P  Pause"
             sound = "S  Sound on" if self.session.sound_enabled else "S  Sound off"
             left = [("pause", pause), ("sound", sound)]
             right = ("menu", "M  Menu")
         elif state == "story":
-            label = "Enter  Continue" if self.session.story_page == 0 else "Enter  Play"
-            left, right = [("advance", label)], ("menu", "M  Menu")
-        elif state in ("result", "retry", "over", "victory"):
+            left, right = [("advance", "Enter  Play")], ("menu", "M  Menu")
+        elif state == "over":
+            left, right = [("advance", "Enter  Play again")], ("menu", "M  Menu")
+        elif state in ("result", "retry", "victory"):
             left, right = [("advance", "Enter  Continue")], ("menu", "M  Menu")
         elif state in ("cabinet", "gacha_opening", "gacha_reveal"):
             label = "Enter  Draw" if state == "cabinet" else "Enter  Reveal"
             if state == "gacha_reveal":
-                label = "Enter  Cabinet"
+                label = "Enter  Next" if self.session.cabinet.duplicate_pending else "Enter  Cabinet"
             left, right = [("advance", label)], ("escape", "Esc  Back")
         else:
             left, right = [], ("escape", "Esc  Back")
-        text_font = font.Font(family="Segoe UI", size=10)
+        if not any(action == "sound" for action, _ in left):
+            left.append(("sound", "S  Sound on" if self.session.sound_enabled else "S  Sound off"))
+        if self.session.sound_enabled:
+            left = [(action, f"S  Sound {self.session.music.volume}%" if action == "sound" else label)
+                    for action, label in left]
+        measure = lambda text: label_width(text, 11)
         old_layer = self.session.art_layer
         self.session.art_layer = "footer_art"
         x = -464
         for action, label in left:
-            width = text_font.measure(label)
+            key, caption = label.split("  ", 1)
+            width = max(28, measure(key) + 14) + 10 + measure(caption)
             self.footer_link(action, label, x, width)
             x += width + 22
         action, label = right
-        width = text_font.measure(label)
+        key, caption = label.split("  ", 1)
+        width = max(28, measure(key) + 14) + 10 + measure(caption)
         self.footer_link(action, label, 464 - width, width)
         self.session.art_layer = old_layer
 
     def footer_link(self, action, label, x, width):
-        self.write(self.session.footer, x, -327, label, 10, MUTED, "left")
-        self.rectangle(x, -332, x + width, -331, "#715166")
+        key, caption = label.split("  ", 1)
+        key_width = max(28, font.Font(font=text_font(11)).measure(key) + 14)
+        self.rectangle(x, -334, x + key_width, -308, "#100e19")
+        self.rectangle(x, -331, x + key_width, -307, "#76576c")
+        self.rectangle(x + 2, -328, x + key_width - 2, -309, "#342a41")
+        canvas = self.session.screen.getcanvas()
+        canvas.create_text(x + key_width / 2, 319, text=key, font=text_font(11),
+                           fill=WHITE, tags=("footer_art",))
+        self.canvas_label(x + key_width + 10, 320, caption, 11, MUTED, ("footer_art",))
         self.session.footer_actions[action] = (x - 4, -335, x + width + 4, -304)
 
-    def show_spark_hint(self):
+    def show_coin_hint(self):
         """Briefly show a small muted glint beneath the tracked cup."""
         cup = self.session.cups[self.session.correct_id]
         canvas = self.session.screen.getcanvas()
-        canvas.delete("spark_hint")
+        canvas.delete("coin_hint")
         canvas.create_image(
             cup.x - 4, 58, anchor="nw",
-            image=self.session.assets["spark_hint"], tags=("spark_hint",),
+            image=self.session.assets["coin_hint"], tags=("coin_hint",),
         )
         self.session.hint_frames = 53
 
@@ -316,7 +417,7 @@ class GameScreens:
         self.session.hud_text.clear()
         self.session.message.clear()
         self.session.buttons = {}
-        setting, speaker, first, second = SCENES[self.session.level - 1]
+        chapter_title, setting, speaker, dialogue = CHAPTERS[self.session.level - 1]
         frame(self, -470, 174, 470, 236, "#211b2c")
         self.write(
             self.session.menu_text,
@@ -336,28 +437,29 @@ class GameScreens:
             WHITE,
             "right",
         )
+        title_half_width = label_width(chapter_title, 24, True) / 2 + 22
+        frame(self, -title_half_width, 110, title_half_width, 158, "#241d30")
         self.write(
             self.session.menu_text,
             0,
             121,
-            CHAPTERS[self.session.level - 1][0],
+            chapter_title,
             24,
             WHITE,
         )
-        portrait(self, speaker, -53, -97)
         self.write(self.session.message, -442, -220, speaker, 16, GOLD, "left")
-        self.write(
+        self.write_wrapped(
             self.session.message,
             -442,
-            -252,
-            (first, second)[self.session.story_page],
+            -246,
+            dialogue,
+            650,
             13,
             WHITE,
-            "left",
         )
         self.draw_button(
             "story_next",
-            "Continue" if self.session.story_page == 0 else "Play",
+            "Play",
             340,
             -260,
             202,

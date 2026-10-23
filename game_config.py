@@ -14,7 +14,7 @@ FRAME_MS = 17
 STORY_LEVELS = 10
 
 # Shared by the painted result button and its click handler.
-RESULT_BUTTON_BOUNDS = (239, -287, 441, -245)
+RESULT_BUTTON_BOUNDS = (239, -282, 441, -240)
 
 COLORS = {
     "background": "#191522",

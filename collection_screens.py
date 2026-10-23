@@ -1,8 +1,11 @@
 """Cup cabinet screens, kept separate from round gameplay."""
 
 import cup_collection as collection
-from party_art import frame
+from party_art import frame, place_image
 from game_config import COLORS
+
+DRAW_FRAMES = 72
+LOCK_OPEN_FRAME = 28
 
 
 class CupCabinet:
@@ -10,17 +13,21 @@ class CupCabinet:
     def __init__(self, session, views):
         self.session = session
         self.views = views
+        self.duplicate_pending = False
 
     def cabinet_shell(self, state):
         self.session.state = state
         self.session.clear_cups()
         self.views.draw_background()
+        if state in ("gacha_opening", "gacha_reveal"):
+            place_image(self.views, self.session.assets["cabinet_reveal"], -470, 236)
         self.session.menu_text.clear()
         self.session.hud_text.clear()
         self.session.message.clear()
         self.session.buttons = {}
 
     def show_cabinet(self, notice=""):
+        self.session.update_window_icon()
         self.cabinet_shell("cabinet")
         frame(self.views, -470, 174, 470, 236, "#211b2c")
         self.views.write(
@@ -35,6 +42,7 @@ class CupCabinet:
             COLORS["white"],
             "right",
         )
+        place_image(self.views, self.session.assets["icons"]["ticket"], 292, 224)
         self.views.write(
             self.session.menu_text,
             440,
@@ -78,14 +86,16 @@ class CupCabinet:
             self.session.static.shape("secret_preview" if hidden else skin + "_preview")
             self.session.static.goto(x, y - 14)
             self.session.static.stamp()
-            self.views.write(
-                self.session.menu_text,
-                x,
-                y - 67,
-                "Equipped" if active else "Click to equip" if owned else "Locked",
-                10,
-                color if owned else COLORS["muted"],
-            )
+            if owned:
+                self.views.write(
+                    self.session.menu_text, x, y - 67,
+                    "Equipped" if active else "Click to equip", 10, color,
+                )
+            else:
+                self.session.screen.getcanvas().create_image(
+                    x, -(y - 30), image=self.session.assets["lock_badge"],
+                    tags=("scene", "cup_lock", f"lock:{skin}"),
+                )
             if owned:
                 self.session.buttons["equip:" + skin] = (
                     x - 132,
@@ -104,7 +114,7 @@ class CupCabinet:
         )
         self.views.draw_button(
             "draw",
-            "Draw / 3 tickets",
+            "Draw for 3 tickets",
             -290,
             -254,
             284,
@@ -161,14 +171,32 @@ class CupCabinet:
 
     def animate_draw(self):
         self.session.draw_frame += 1
-        if self.session.draw_frame >= 48:
+        if self.session.draw_frame >= DRAW_FRAMES:
             self.reveal_draw()
             return
         self.session.screen.getcanvas().delete("draw_fx")
         self.session.art_layer = "draw_fx"
         center = 32
-        width = 28 + self.session.draw_frame // 2
-        frame(self.views, -width, center - 50, width, center + 50, "#594050", "#f2bf68")
+        frame(self.views, -96, center - 92, 96, center + 104, "#302539", "#f2bf68")
+        canvas = self.session.screen.getcanvas()
+        canvas.create_image(0, -center, image=self.session.assets["draw_mystery"], tags=("draw_fx",))
+        if self.session.draw_status == "new":
+            progress = self.session.draw_frame
+            if progress < LOCK_OPEN_FRAME:
+                phase = 0
+            elif progress < 40:
+                phase = 1
+            elif progress < 56:
+                phase = 2
+            else:
+                phase = 3
+            shake = (-2, 0, 2, 0)[progress // 3 % 4] if phase == 0 else 0
+            canvas.create_image(
+                shake, -center + 28, image=self.session.assets["unlock_frames"][phase],
+                tags=("draw_fx", "unlock_lock"),
+            )
+            if progress == LOCK_OPEN_FRAME:
+                self.session.play_tone("unlock")
         for i in range(8):
             x = -160 + (i * 43) % 320
             y = -60 + (i * 31 + self.session.draw_frame * 3) % 180
@@ -177,6 +205,7 @@ class CupCabinet:
 
     def reveal_draw(self):
         skin, status = self.session.pending_cup, self.session.draw_status
+        self.duplicate_pending = status == "duplicate"
         self.cabinet_shell("gacha_reveal")
         _, name, rarity, _, color = next(
             cup for cup in collection.CUPS if cup[0] == skin
@@ -187,14 +216,29 @@ class CupCabinet:
         self.session.static.stamp()
         self.views.write(self.session.menu_text, 0, -70, name, 22, color)
         self.views.set_message(
-            "Already yours" if status == "duplicate" else "A new cup",
+            "Duplicate cup" if status == "duplicate" else "Cup unlocked",
             (
-                "One ticket returned."
+                "You already own this cup. Next converts it to 1 ticket."
                 if status == "duplicate"
                 else "Equip it for your next game."
             ),
         )
-        self.views.draw_button("equip:" + skin, "Equip", 80, -260, 202, True)
-        self.views.draw_button("cabinet", "Keep browsing", 340, -260, 202)
+        if self.duplicate_pending:
+            self.views.draw_button("convert_duplicate", "Next", 340, -260, 202, True)
+        else:
+            self.views.draw_button("equip:" + skin, "Equip", 80, -260, 202, True)
+            self.views.draw_button("cabinet", "Keep browsing", 340, -260, 202)
         self.session.play_tone("win")
+        self.session.screen.update()
+
+    def convert_duplicate(self):
+        """Present the already-saved refund only after the player acknowledges it."""
+        if self.session.state != "gacha_reveal" or not self.duplicate_pending:
+            return
+        self.duplicate_pending = False
+        self.session.static.clearstamps()
+        self.session.buttons = {}
+        self.views.set_message("Duplicate converted", "+1 ticket added to your cabinet.")
+        self.views.draw_button("cabinet", "Keep browsing", 340, -260, 202, True)
+        self.session.effects.duplicate(self.session.pending_cup)
         self.session.screen.update()

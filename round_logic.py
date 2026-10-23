@@ -2,6 +2,7 @@
 
 import math
 import random
+import uuid
 import time
 import cup_collection as collection
 from game_config import COLORS, DIFFICULTIES, STORY_LEVELS, level_settings
@@ -26,6 +27,8 @@ class RoundLogic:
             )
 
     def start_game(self):
+        self.session.progress.clear()
+        self.session.run_id = uuid.uuid4().hex
         self.session.save_failed = False
         self.session.reward_failed = False
         self.session.score = 0
@@ -41,7 +44,7 @@ class RoundLogic:
     def selection_hint(self):
         return f"Click a cup or press 1-{len(self.session.cups)}."
 
-    def start_level(self):
+    def start_level(self, refresh=True):
         self.session.state = "reveal"
         self.session.clear_cups()
         self.views.draw_background()
@@ -67,7 +70,7 @@ class RoundLogic:
         self.session.art_layer = "choice_art"
         for i, x in enumerate(self.session.slots):
             self.views.rectangle(x - 15, -124, x + 15, -96, "#312331")
-            self.views.write(self.session.labels, x, -119, str(i + 1), 12, GOLD)
+            self.views.write(self.session.labels, x, -119, str(i + 1), 14, GOLD)
         self.session.art_layer = "scene"
 
         self.session.correct_id = random.randrange(count)
@@ -81,18 +84,20 @@ class RoundLogic:
         special.y = 76
         special.render()
 
-        self.session.ball.goto(special.x, -40)
-        self.session.ball.showturtle()
+        self.session.coin.goto(special.x, -40)
+        self.session.coin.showturtle()
 
-        self.views.set_message("Remember the spark", "Watch which cup holds it.")
+        self.views.set_message("Remember the coin", "Watch which cup holds it.")
 
-        self.session.play_tone("reveal")
+        if refresh:
+            self.session.play_tone("reveal")
         self.session.screen.listen()
-        self.session.screen.update()
+        if refresh:
+            self.session.screen.update()
 
     def begin_shuffle(self):
         self.session.state = "shuffle"
-        self.session.ball.hideturtle()
+        self.session.coin.hideturtle()
 
         for cup in self.session.cups:
             cup.y = 0
@@ -104,9 +109,9 @@ class RoundLogic:
         if self.session.swap_pair is None:
             if self.session.completed_swaps >= self.session.swaps:
                 self.session.state = "select"
-                self.views.set_message("Where is the spark?", self.selection_hint())
+                self.views.set_message("Where is the coin?", self.selection_hint())
                 if self.session.mode == "Endless" and self.session.level > 10:
-                    self.views.show_spark_hint()
+                    self.views.show_coin_hint()
                 return
 
             a, b = random.sample(self.session.cups, 2)
@@ -158,14 +163,14 @@ class RoundLogic:
         # Lock input before rendering so a second click cannot score twice.
         self.session.state = "resolving"
         self.session.hint_frames = 0
-        self.session.screen.getcanvas().delete("spark_hint")
+        self.session.screen.getcanvas().delete("coin_hint")
         correct = self.session.cups[self.session.correct_id]
         selected.y = 76
         selected.render()
         correct.y = 76
         correct.render()
-        self.session.ball.goto(correct.x, -40)
-        self.session.ball.showturtle()
+        self.session.coin.goto(correct.x, -40)
+        self.session.coin.showturtle()
 
         if selected is correct:
             self.resolve_correct_guess()
@@ -182,11 +187,13 @@ class RoundLogic:
         reward_key = None
         if self.session.mode == "Story":
             reward_key = f"{self.session.difficulty}:{self.session.level}"
+        else:
+            reward_key = f"Endless:{self.session.run_id}:{self.session.level}"
         earned = collection.reward(
             self.session.profile_path, self.session.profile, reward_key
         )
         self.session.reward_failed = earned == -1
-        earned_text = "  /  +1 ticket" if earned == 1 else ""
+        earned_text = " and 1 ticket" if earned == 1 else ""
 
         self.session.score += points
         self.save_high_score()
@@ -197,10 +204,13 @@ class RoundLogic:
         else:
             self.session.state = "result"
             self.views.set_message("Found it", f"+{points} points{earned_text}")
+        bonus = 1000 if self.session.state == "victory" and self.session.perfect else 0
+        self.session.effects.award(points + bonus, earned == 1)
 
     def finish_story(self):
         """Complete the narrative and apply the perfect-run bonus once."""
         self.session.state = "victory"
+        self.session.progress.clear()
         if self.session.perfect:
             self.session.score += 1000
             self.save_high_score()
@@ -239,12 +249,11 @@ class RoundLogic:
             self.session.state = "retry"
             self.views.set_message("Not this cup", f"{self.session.lives} lives left.")
         else:
-            self.session.state = "over"
-            self.views.set_message("Party over", f"Final score: {self.session.score:,}")
+            self.session.progress.clear()
+            self.views.show_game_over()
 
     def begin_chapter(self):
         if self.session.mode == "Story":
-            self.session.story_page = 0
             self.views.show_story()
         else:
             self.start_level()

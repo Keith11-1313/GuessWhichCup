@@ -7,6 +7,9 @@ rendering, rounds, input and the cabinet without multiple inheritance.
 import time
 import tkinter
 import turtle
+import uuid
+import sys
+import ctypes
 import cup_collection as collection
 from collection_screens import CupCabinet
 from game_config import COLORS, FRAME_MS, HEIGHT, SAVE_FILE, WIDTH
@@ -16,6 +19,11 @@ from input_controls import InputControls
 from party_art import load_assets
 from round_logic import RoundLogic
 from score_store import load_scores
+from game_theme import load_font
+from game_audio import BackgroundMusic
+from run_progress import RunProgress, load_run
+from pause_menu import PauseMenu
+from visual_effects import VisualEffects
 
 BG = COLORS["background"]
 MUTED = COLORS["muted"]
@@ -25,7 +33,11 @@ GOLD = COLORS["gold"]
 class Game:
     """Session and runtime with explicitly constructed behavior components."""
 
-    def __init__(self, run_loop=True, score_path=None, profile_path=None):
+    def __init__(self, run_loop=True, score_path=None, profile_path=None, run_path=None):
+        load_font()
+        if sys.platform == "win32":
+            # Give the source game its own taskbar identity instead of Python's.
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("LanternHouse.GuessWhichCup")
         self.screen = turtle.Screen()
         self.screen.setup(WIDTH, HEIGHT)
         self.screen.title("Guess Which Cup | Lantern House")
@@ -38,6 +50,7 @@ class Game:
         self.last_tick = time.monotonic()
         self.frame_credit = 0.0
         root = self.screen.getcanvas().winfo_toplevel()
+        root.iconphoto(True, self.assets["app_icon"])
         root.resizable(False, False)
         root.protocol("WM_DELETE_WINDOW", self.close)
 
@@ -48,12 +61,12 @@ class Game:
         self.message = make_writer()
         self.labels = make_writer(MUTED)
 
-        self.ball = turtle.Turtle(visible=False)
-        self.ball.speed(0)
-        self.ball.penup()
-        self.ball.shape("spark")
-        self.ball.setheading(90)
-        self.ball.color(GOLD)
+        self.coin = turtle.Turtle(visible=False)
+        self.coin.speed(0)
+        self.coin.penup()
+        self.coin.shape("coin")
+        self.coin.setheading(90)
+        self.coin.color(GOLD)
 
         # QA supplies temporary paths; normal play uses saves beside the game.
         self.score_path = SAVE_FILE if score_path is None else score_path
@@ -62,7 +75,10 @@ class Game:
             collection.PROFILE_FILE if profile_path is None else profile_path
         )
         self.profile = collection.load_profile(self.profile_path)
-        self.story_page = 0
+        self.progress = RunProgress(self, run_path or self.profile_path.with_name("lantern_run.json"))
+        self.saved_run = load_run(self.progress.path)
+        self.run_id = uuid.uuid4().hex
+        self.icon_skin = None
         self.save_failed = False
         self.reward_failed = False
         self.pending_cup = None
@@ -96,29 +112,41 @@ class Game:
         self.buttons = {}
         self.footer_actions = {}
         self.hint_frames = 0
+        self.effects = VisualEffects(self)
 
         self.views = GameScreens(self)
         self.rounds = RoundLogic(self, self.views)
         self.cabinet = CupCabinet(self, self.views)
         self.controls = InputControls(self, self.views, self.rounds, self.cabinet)
+        self.pause_menu = PauseMenu(self)
         self.controls.bind_controls()
+        self.music = BackgroundMusic(root)
+        self.audio_active = run_loop
         self.views.show_menu()
         self.screen.ontimer(self.update, FRAME_MS)
         if run_loop:
+            self.music.start()
             self.screen.mainloop()
 
     def clear_cups(self):
         self.hint_frames = 0
-        self.screen.getcanvas().delete("spark_hint")
+        self.screen.getcanvas().delete("coin_hint")
         for cup in self.cups:
             cup.hide()
 
         self.cups = []
-        self.ball.hideturtle()
+        self.coin.hideturtle()
         self.labels.clear()
 
     def best_key(self):
         return f"{self.mode.lower()}_{self.difficulty.lower()}"
+
+    def update_window_icon(self):
+        skin = self.profile["equipped"]
+        if self.icon_skin != skin:
+            self.window_icon = self.assets["skins"][skin][0].zoom(2)
+            self.screen.getcanvas().winfo_toplevel().iconphoto(True, self.window_icon)
+            self.icon_skin = skin
 
     def best_score(self):
         return int(self.scores.get(self.best_key(), 0))
@@ -128,7 +156,10 @@ class Game:
             tone(kind)
 
     def close(self):
+        if not self.running:
+            return
         self.running = False
+        self.music.stop()
         self.screen.bye()
 
     def update(self):
@@ -142,6 +173,8 @@ class Game:
             steps = int(self.frame_credit)
             self.frame_credit -= steps
             for _ in range(steps):
+                if self.state != "paused":
+                    self.effects.update()
                 if self.state == "reveal":
                     self.reveal_frame += 1
                     if self.reveal_frame >= self.reveal_frames:
@@ -153,7 +186,7 @@ class Game:
                 elif self.state == "select" and self.hint_frames:
                     self.hint_frames -= 1
                     if self.hint_frames == 0:
-                        self.screen.getcanvas().delete("spark_hint")
+                        self.screen.getcanvas().delete("coin_hint")
             self.screen.update()
             if self.running:
                 self.screen.ontimer(self.update, FRAME_MS)
