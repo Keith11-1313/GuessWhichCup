@@ -1,14 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
 
-version = Path('VERSION').read_text(encoding='utf-8').strip()
+Version = Path("Version").read_text(encoding="utf-8").strip()
 
 
-a = Analysis(
-    ['what_the_cup.py'],
+AnalysisResult = Analysis(
+    ["WhatTheCup.py"],
     pathex=[],
     binaries=[],
-    datas=[('assets', 'assets')],
+    datas=[("assets", "assets")],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -17,15 +17,15 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
-pyz = PYZ(a.pure)
+Pyz = PYZ(AnalysisResult.pure)
 
-exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.datas,
+Executable = EXE(
+    Pyz,
+    AnalysisResult.scripts,
+    AnalysisResult.binaries,
+    AnalysisResult.datas,
     [],
-    name='GuessWhichCup-v' + version,
+    name="GuessWhichCup-v" + Version,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -38,5 +38,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['assets/ui/app_icon.ico'],
+    icon=["assets/ui/AppIcon.ico"],
 )

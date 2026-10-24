@@ -3,6 +3,13 @@ __pycache__/
 *.tmp
 /lantern_profile.json
 /lantern_run.json
+/lantern_settings.json
+/what_the_cup_scores.json
+/WhatTheCupScores.json
 /.build-tools/
 /build/
 /dist/
+
+/LanternProfile.json
+/LanternRun.json
+/LanternSettings.json
