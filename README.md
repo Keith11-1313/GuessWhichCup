@@ -63,13 +63,13 @@ The sound control is available on every screen; S mutes both music and effects.
 | Enter or Space | Play, resume a saved run, Next, Retry, draw, reveal, or confirm duplicate conversion |
 | P | Open pause options or resume gameplay |
 | S | Toggle sound |
-| [ and ] | Lower and raise music volume by 5% respectively |
+| - and = | Lower and raise music volume by 5% respectively |
 | Tab | Switch menu mode |
 | Left and Right | Change menu difficulty |
 | C | Cup cabinet from the menu |
 | H | Help outside a run; pause options during a run |
 | M | Pause options during a run; menu elsewhere |
-| R | Restart the selected mode, except while paused |
+| R | Restart the selected mode, including from pause |
 | Escape | Pause/resume during a run; back elsewhere; close from the menu |
 
 ## Cup cabinet
@@ -119,7 +119,10 @@ Collection, tickets, claimed chapter rewards, and equipped cup are saved to
 `lantern_profile.json`. High scores remain in `what_the_cup_scores.json`.
 Writes use atomic replacement; a failed draw save spends no tickets.
 M, P or Escape during a run opens a pause overlay. Resume returns to the exact
-frozen board. Save & Menu saves a checkpoint and returns to the main menu;
+frozen board. Restart run (circular arrow) begins the selected mode and
+difficulty again from round or chapter 1, resets the run score and hearts,
+and clears its checkpoint. Cups, tickets and high scores remain saved.
+Save & Menu uses a home icon; Save & Exit uses a door-and-arrow icon. Save & Menu saves a checkpoint and returns to the main menu;
 Save & Exit saves first, then closes the game. Failed saves leave the table
 paused with an error. The Welcome back screen shows the saved mode, difficulty, chapter
 or round, score and remaining hearts. It offers Resume and New game; new-game
@@ -273,7 +276,8 @@ Pillow installation is needed to play the game.
 | `assets/ui` | `heart_full.png`, `heart_empty.png` | 24 x 18, transparent |
 | `assets/ui` | `coin_hint.png` | 9 x 7, transparent |
 | `assets/ui` | `app_icon.png`; `app_icon.ico` | Brass Keepsake window and executable icons |
-| `assets/ui` | Button icons and `_dark` variants, except tickets | 16 x 16, transparent |
+| `assets/ui` | Button icons and `_dark` variants, except tickets and pause actions | 16 x 16, transparent |
+| `assets/ui` | `restart.png`, `home.png`, `exit.png` and `_dark` variants | 24 x 24, transparent |
 | `assets/ui` | `ticket.png`, `ticket_dark.png` | 20 x 16, transparent; conversion reward scales to 80 x 64 |
 | `assets/ui` | `lock_badge.png`; `unlock_0.png` through `unlock_3.png` | 32 x 34; 24 x 28, transparent |
 
@@ -291,7 +295,7 @@ the pixel font. Cup number labels are larger than the small counter text.
 a loopable 100 BPM synth-and-sax puzzle track released under CC0. Source and license details
 are in `assets/sounds/MUSIC-CREDITS.txt`. It is converted to 22,050 Hz stereo,
 16-bit PCM WAV and normalized to -22 LUFS. It starts at 20%
-music-channel volume. Use [ and ] to adjust by 5%; change
+music-channel volume. Use - and = to adjust by 5%; change
 `DEFAULT_MUSIC_VOLUME` in `game_audio.py` to tune the starting level.
 All effects share a soft mallet timbre with gentle attacks and short tails.
 Click, reveal, correct, wrong, win, unlock, ticket conversion, equip and pause

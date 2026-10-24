@@ -485,6 +485,27 @@ class GameTests(unittest.TestCase):
         self.click_button("resume_run")
         self.assertEqual((g.mode, g.difficulty), ("Endless", "Hard"))
 
+    def test_pause_restart_resets_run_and_uses_distinct_icons(self):
+        g = self.game
+        g.mode, g.difficulty = "Endless", "Normal"
+        self.start_gameplay()
+        g.score, g.level, g.lives = 500, 3, 1
+        previous_run = g.run_id
+        g.controls.request_menu()
+        self.assertEqual(set(g.buttons), {"resume", "restart", "save_menu", "save_exit"})
+        bounds = sorted(g.buttons.values(), key=lambda item: item[1])
+        for lower, upper in zip(bounds, bounds[1:]):
+            self.assertLess(lower[3], upper[1])
+        canvas = g.screen.getcanvas()
+        images = [canvas.itemcget(i, "image") for i in canvas.find_withtag("pause_art") if canvas.type(i) == "image"]
+        for icon in ("restart", "home", "exit"):
+            self.assertIn(str(g.assets["icons"][icon]), images)
+        self.click_button("restart")
+        self.assertEqual((g.state, g.score, g.level, g.lives), ("reveal", 0, 1, 3))
+        self.assertNotEqual(g.run_id, previous_run)
+        self.assertIsNone(g.paused_state)
+        self.assertFalse(canvas.find_withtag("pause_art"))
+
     def test_pause_save_failure_stays_open_and_exit_saves_first(self):
         g = self.game
         self.start_gameplay()

@@ -50,11 +50,11 @@ def load_assets(screen):
         "unlock_frames": [load(f"ui/unlock_{index}.png").zoom(3) for index in range(4)],
         "icons": {
             name: load(f"ui/{name}.png")
-            for name in ("play", "book", "endless", "help", "cup", "ticket", "odds", "back")
+            for name in ("play", "book", "endless", "help", "cup", "ticket", "odds", "back", "home", "exit", "restart", "new_game")
         },
         "icons_dark": {
             name: load(f"ui/{name}_dark.png")
-            for name in ("play", "book", "endless", "help", "cup", "ticket", "odds", "back")
+            for name in ("play", "book", "endless", "help", "cup", "ticket", "odds", "back", "home", "exit", "restart", "new_game")
         },
     }
 

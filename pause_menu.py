@@ -29,9 +29,10 @@ class PauseMenu:
         frame(g.views, -250, -198, 250, 174, "#211b2c")
         g.views.canvas_label(-56, -126, "Paused", 24, COLORS["gold"], ("pause_art",))
         g.buttons = {}
-        g.views.draw_button("resume", "Resume", 0, 24, 300, True)
-        g.views.draw_button("save_menu", "Save & Menu", 0, -34, 300)
-        g.views.draw_button("save_exit", "Save & Exit", 0, -92, 300)
+        g.views.draw_button("resume", "Resume", 0, 58, 300, True)
+        g.views.draw_button("restart", "Restart run", 0, 0, 300)
+        g.views.draw_button("save_menu", "Save & Menu", 0, -58, 300)
+        g.views.draw_button("save_exit", "Save & Exit", 0, -116, 300)
         if error:
             g.views.canvas_label(-205, 161, error, 11, COLORS["danger"], ("pause_art",))
         g.art_layer = "scene"

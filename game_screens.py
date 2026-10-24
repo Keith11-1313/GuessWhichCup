@@ -101,20 +101,21 @@ class GameScreens:
         icon_name = {
             "start": "play", "story_next": "play", "mode:Story": "book",
             "play_again": "play", "game_menu": "back", "resume": "play", "resume_run": "play",
-            "new_game_setup": "play", "back_saved": "back", "save_menu": "back", "save_exit": "back", "convert_duplicate": "play",
+            "new_game_setup": "new_game", "back_saved": "back", "save_menu": "home", "save_exit": "exit", "restart": "restart", "convert_duplicate": "play",
             "mode:Endless": "endless", "howto": "help",
             "cabinet": "cup" if text == "Cup cabinet" else "back",
             "draw": "ticket", "odds": "odds", "back": "back",
         }.get(name)
-        offset = 24 if icon_name else 0
+        palette = "icons_dark" if active else "icons"
+        icon = self.session.assets[palette][icon_name] if icon_name else None
+        offset = icon.width() + 10 if icon is not None else 0
         size = 12
         while size > 9 and label_width(text, size) + offset > width - 28:
             size -= 1
         text_width = label_width(text, size)
         left = x - (text_width + offset) / 2
         if icon_name:
-            palette = "icons_dark" if active else "icons"
-            place_image(self, self.session.assets[palette][icon_name], left, y + 8)
+            place_image(self, icon, left, y + icon.height() / 2)
         self.canvas_label(left + offset, -y, text, size,
                           "#2b2030" if active else WHITE, (self.session.art_layer,))
         self.session.buttons[name] = (x - width / 2, y - 22, x + width / 2, y + 22)
@@ -159,7 +160,7 @@ class GameScreens:
         )
         self.set_message(
             "Take your time",
-            "P pauses. Use [ and ] for music volume. S mutes sound.",
+            "P pauses. Use - and = for music volume. S mutes sound.",
         )
         self.draw_button("back", "Back to the party", 312, -260, 242, True)
         self.session.screen.update()

@@ -46,6 +46,8 @@ class InputControls:
             button = self.button_at(x, y)
             if button == "resume":
                 self.session.pause_menu.resume()
+            elif button == "restart":
+                self.restart()
             elif button in ("save_menu", "save_exit"):
                 self.session.pause_menu.save_and_leave(exit_app=button == "save_exit")
             return
@@ -144,7 +146,7 @@ class InputControls:
 
     def restart(self):
         if self.session.state == "paused":
-            return
+            self.session.pause_menu.resume()
         self.rounds.start_game()
 
     def request_help(self):
@@ -241,8 +243,8 @@ class InputControls:
         self.session.screen.onkeypress(self.toggle_sound, "s")
         self.session.screen.onkeypress(self.toggle_pause, "P")
         self.session.screen.onkeypress(self.toggle_sound, "S")
-        self.session.screen.onkeypress(lambda: self.adjust_music_volume(-5), "bracketleft")
-        self.session.screen.onkeypress(lambda: self.adjust_music_volume(5), "bracketright")
+        self.session.screen.onkeypress(lambda: self.adjust_music_volume(-5), "minus")
+        self.session.screen.onkeypress(lambda: self.adjust_music_volume(5), "equal")
         for key in ("c", "C"):
             self.session.screen.onkeypress(self.open_cabinet_from_menu, key)
         self.session.screen.onkeypress(self.cycle_mode, "Tab")
